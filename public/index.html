@@ -1453,6 +1453,28 @@
         </div>
     </div>
 
+        <!-- Модальное окно входящего звонка -->
+    <div class="modal-overlay" id="incoming-call-modal">
+        <div class="modal-box incoming-call-box">
+            <div class="caller-info">
+                <img src="" alt="Аватар" class="caller-avatar" id="caller-avatar">
+                <h3 id="caller-name">Входящий звонок</h3>
+                <p>Вам звонят...</p>
+            </div>
+            
+            <div class="call-controls">
+                <button class="call-btn accept-call" id="accept-call">
+                    <i class="fas fa-phone"></i>
+                    Принять
+                </button>
+                <button class="call-btn reject-call" id="reject-call">
+                    <i class="fas fa-phone-slash"></i>
+                    Отклонить
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
         let currentUser = null;
@@ -2462,3 +2484,4 @@
 </body>
 
 </html>
+
