@@ -337,6 +337,15 @@ app.get('/api/check-new-messages/:userId/:contactId', (req, res) => {
     );
 });
 
+// Пример для PostgreSQL
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
 // Обслуживание статических файлов
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -364,4 +373,5 @@ process.on('SIGINT', () => {
         console.log('Подключение к базе данных закрыто.');
         process.exit(0);
     });
+
 });
