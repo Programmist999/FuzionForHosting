@@ -411,6 +411,81 @@ function handleCallOffer(callerId, data) {
     }
 }
 
+function handleCallAnswer(calleeId, data) {
+    const { callId, answer } = data;
+    const callData = activeCalls.get(callId);
+    
+    if (callData) {
+        // Отправляем ответ звонка callerу
+        const callerWs = connections.get(callData.callerId);
+        if (callerWs) {
+            callerWs.send(JSON.stringify({
+                type: 'call-answered',
+                callId,
+                answer,
+                calleeId
+            }));
+        }
+    }
+}
+
+function handleIceCandidate(userId, data) {
+    const { callId, candidate, targetUserId } = data;
+    const targetWs = connections.get(targetUserId);
+    
+    if (targetWs) {
+        targetWs.send(JSON.stringify({
+            type: 'ice-candidate',
+            callId,
+            candidate,
+            userId
+        }));
+    }
+}
+
+function handleCallReject(calleeId, data) {
+    const { callId } = data;
+    const callData = activeCalls.get(callId);
+    
+    if (callData) {
+        // Отправляем отклонение звонка callerу
+        const callerWs = connections.get(callData.callerId);
+        if (callerWs) {
+            callerWs.send(JSON.stringify({
+                type: 'call-rejected',
+                callId
+            }));
+        }
+        activeCalls.delete(callId);
+    }
+}
+
+function handleEndCall(userId, data) {
+    const { callId } = data;
+    const callData = activeCalls.get(callId);
+    
+    if (callData) {
+        // Отправляем завершение звонка другой стороне
+        const targetId = callData.callerId === userId ? callData.calleeId : callData.callerId;
+        const targetWs = connections.get(targetId);
+        
+        if (targetWs) {
+            targetWs.send(JSON.stringify({
+                type: 'call-ended',
+                callId
+            }));
+        }
+        activeCalls.delete(callId);
+    }
+}
+
+// Заменяем запуск сервера в конце файла:
+server.listen(PORT, () => {
+    console.log(`Сервер запущен на порту ${PORT}`);
+    console.log(`WebSocket сервер запущен`);
+    console.log(`Откройте в браузере: http://localhost:${PORT}`);
+});
+
 // Пример для PostgreSQL
 const { Pool } = require('pg');
 const pool = new Pool({
