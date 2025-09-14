@@ -2394,24 +2394,24 @@
             }
         }
         
-        function simulateConversation() {
-            // Имитация разговора собеседника
-            speakingInterval = setInterval(() => {
-                if (!isCallActive) return;
+        // function simulateConversation() {
+        //     // Имитация разговора собеседника
+        //     speakingInterval = setInterval(() => {
+        //         if (!isCallActive) return;
                 
-                // Случайным образом определяем, говорит ли собеседник
-                const isContactSpeaking = Math.random() > 0.7;
+        //         // Случайным образом определяем, говорит ли собеседник
+        //         const isContactSpeaking = Math.random() > 0.7;
                 
-                // Обновляем статус и анимацию собеседника
-                document.getElementById('contact-status').textContent = isContactSpeaking ? 'Говорит' : 'Слушает';
-                document.getElementById('contact-pulse').style.animation = isContactSpeaking ? 'pulse 2s infinite' : 'none';
+        //         // Обновляем статус и анимацию собеседника
+        //         document.getElementById('contact-status').textContent = isContactSpeaking ? 'Говорит' : 'Слушает';
+        //         document.getElementById('contact-pulse').style.animation = isContactSpeaking ? 'pulse 2s infinite' : 'none';
                 
-                // Обновляем индикатор громкости собеседника
-                const contactVolume = document.getElementById('contact-volume');
-                contactVolume.style.width = isContactSpeaking ? (30 + Math.random() * 70) + '%' : '0%';
+        //         // Обновляем индикатор громкости собеседника
+        //         const contactVolume = document.getElementById('contact-volume');
+        //         contactVolume.style.width = isContactSpeaking ? (30 + Math.random() * 70) + '%' : '0%';
                 
-            }, 3000);
-        }
+        //     }, 3000);
+        // }
         
         // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
         function escapeHtml(text) {
@@ -2659,6 +2659,7 @@
     </script>
 </body>
 </html>
+
 
 
 
