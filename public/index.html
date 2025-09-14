@@ -1220,6 +1220,78 @@
             margin-bottom: 15px;
             opacity: 0.5;
         }
+
+                /* Стили для входящего звонка */
+        .incoming-call-box {
+            text-align: center;
+            max-width: 400px;
+        }
+        
+        .caller-info {
+            margin-bottom: 30px;
+        }
+        
+        .caller-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 3px solid #7a64ff;
+            margin-bottom: 15px;
+            object-fit: cover;
+        }
+        
+        .call-controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+        
+        .call-btn {
+            padding: 15px 25px;
+            border-radius: 50px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .accept-call {
+            background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+        }
+        
+        .reject-call {
+            background: linear-gradient(90deg, #ff3366 0%, #ff7733 100%);
+            color: white;
+        }
+        
+        .call-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Анимация пульсации для входящего звонка */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(1.2); opacity: 0; }
+        }
+        
+        .pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 120px;
+            border: 2px solid #4CAF50;
+            border-radius: 50%;
+            animation: pulse-ring 2s infinite;
+        }
+        
     </style>
 </head>
 <body>
@@ -2484,4 +2556,5 @@
 </body>
 
 </html>
+
 
