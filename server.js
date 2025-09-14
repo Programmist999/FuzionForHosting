@@ -4,9 +4,15 @@ const bcrypt = require('bcryptjs');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
+const WebSocket = require('ws');
+const http = require('http');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Создаем HTTP сервер для WebSocket
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
 // Middleware
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -337,6 +343,74 @@ app.get('/api/check-new-messages/:userId/:contactId', (req, res) => {
     );
 });
 
+// Хранилище активных звонков
+const activeCalls = new Map();
+
+// WebSocket соединения
+const connections = new Map();
+
+wss.on('connection', (ws, request) => {
+    const userId = request.url.split('=')[1]; // /?userId=123
+    connections.set(userId, ws);
+    
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            handleWebSocketMessage(userId, data);
+        } catch (error) {
+            console.error('WebSocket error:', error);
+        }
+    });
+    
+    ws.on('close', () => {
+        connections.delete(userId);
+        // Удаляем активные звонки пользователя
+        for (const [callId, callData] of activeCalls.entries()) {
+            if (callData.callerId === userId || callData.calleeId === userId) {
+                activeCalls.delete(callId);
+            }
+        }
+    });
+});
+
+function handleWebSocketMessage(userId, data) {
+    switch (data.type) {
+        case 'call-offer':
+            handleCallOffer(userId, data);
+            break;
+        case 'call-answer':
+            handleCallAnswer(userId, data);
+            break;
+        case 'ice-candidate':
+            handleIceCandidate(userId, data);
+            break;
+        case 'call-reject':
+            handleCallReject(userId, data);
+            break;
+        case 'end-call':
+            handleEndCall(userId, data);
+            break;
+    }
+}
+
+function handleCallOffer(callerId, data) {
+    const { calleeId, offer, callId } = data;
+    activeCalls.set(callId, { callerId, calleeId, offer });
+    
+    // Отправляем предложение звонка получателю
+    const calleeWs = connections.get(calleeId);
+    if (calleeWs) {
+        calleeWs.send(JSON.stringify({
+            type: 'incoming-call',
+            callerId,
+            callId,
+            offer,
+            callerName: data.callerName,
+            callerAvatar: data.callerAvatar
+        }));
+    }
+}
+
 // Пример для PostgreSQL
 const { Pool } = require('pg');
 const pool = new Pool({
@@ -377,4 +451,5 @@ process.on('SIGINT', () => {
     });
 
 });
+
 
