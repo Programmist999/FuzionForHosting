@@ -4,21 +4,144 @@ const bcrypt = require('bcryptjs');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
-const WebSocket = require('ws');
 const http = require('http');
+const WebSocket = require('ws');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Создаем HTTP сервер для WebSocket
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cors());
 app.use(express.static('public'));
+
+// Хранилище WebSocket соединений
+const userConnections = new Map();
+
+// WebSocket обработка
+wss.on('connection', (ws, request) => {
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const userId = url.searchParams.get('userId');
+    
+    console.log('User connected:', userId);
+    
+    if (userId) {
+        userConnections.set(userId, ws);
+    }
+
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            handleWebSocketMessage(userId, data);
+        } catch (error) {
+            console.error('WebSocket message error:', error);
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('User disconnected:', userId);
+        if (userId) {
+            userConnections.delete(userId);
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+});
+
+function handleWebSocketMessage(userId, data) {
+    console.log('Received message:', data.type, 'from:', userId);
+    
+    switch (data.type) {
+        case 'call-offer':
+            handleCallOffer(userId, data);
+            break;
+        case 'call-answer':
+            handleCallAnswer(userId, data);
+            break;
+        case 'ice-candidate':
+            handleIceCandidate(userId, data);
+            break;
+        case 'reject-call':
+            handleRejectCall(userId, data);
+            break;
+        case 'end-call':
+            handleEndCall(userId, data);
+            break;
+    }
+}
+
+function handleCallOffer(callerId, data) {
+    const { targetUserId, offer, callerName, callerAvatar } = data;
+    console.log('Call offer from', callerId, 'to', targetUserId);
+    
+    const targetWs = userConnections.get(targetUserId);
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'incoming-call',
+            callerId: callerId,
+            offer: offer,
+            callerName: callerName,
+            callerAvatar: callerAvatar
+        }));
+        console.log('Call offer sent to', targetUserId);
+    } else {
+        console.log('Target user not connected:', targetUserId);
+    }
+}
+
+function handleCallAnswer(calleeId, data) {
+    const { callerId, answer } = data;
+    console.log('Call answer from', calleeId, 'to', callerId);
+    
+    const callerWs = userConnections.get(callerId);
+    if (callerWs && callerWs.readyState === WebSocket.OPEN) {
+        callerWs.send(JSON.stringify({
+            type: 'call-answered',
+            answer: answer,
+            calleeId: calleeId
+        }));
+    }
+}
+
+function handleIceCandidate(userId, data) {
+    const { targetUserId, candidate } = data;
+    
+    const targetWs = userConnections.get(targetUserId);
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'ice-candidate',
+            candidate: candidate,
+            userId: userId
+        }));
+    }
+}
+
+function handleRejectCall(calleeId, data) {
+    const { callerId } = data;
+    
+    const callerWs = userConnections.get(callerId);
+    if (callerWs && callerWs.readyState === WebSocket.OPEN) {
+        callerWs.send(JSON.stringify({
+            type: 'call-rejected'
+        }));
+    }
+}
+
+function handleEndCall(userId, data) {
+    const { targetUserId } = data;
+    
+    const targetWs = userConnections.get(targetUserId);
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'call-ended'
+        }));
+    }
+}
 
 // Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
@@ -61,7 +184,7 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
             }
         });
         
-        // Создание тестового пользователя, если база пустая
+        // Создание тестового пользователя
         db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
             if (err) {
                 console.error('Ошибка проверки пользователей:', err);
@@ -86,7 +209,7 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
     }
 });
 
-// Маршрут для регистрации
+// API маршруты
 app.post('/api/register', async (req, res) => {
     const { username, password, name } = req.body;
     
@@ -103,10 +226,8 @@ app.post('/api/register', async (req, res) => {
     }
     
     try {
-        // Хеширование пароля
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        // Сохранение пользователя в базу данных
         db.run(
             'INSERT INTO users (username, password, name) VALUES (?, ?, ?)',
             [username, hashedPassword, name || username],
@@ -118,7 +239,6 @@ app.post('/api/register', async (req, res) => {
                     return res.status(500).json({ success: false, error: 'Ошибка при создании пользователя' });
                 }
                 
-                // Получаем данные созданного пользователя
                 db.get(
                     'SELECT id, username, name, avatar, created_at FROM users WHERE id = ?',
                     [this.lastID],
@@ -142,7 +262,6 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// Маршрут для входа
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     
@@ -150,7 +269,6 @@ app.post('/api/login', (req, res) => {
         return res.status(400).json({ success: false, error: 'Имя пользователя и пароль обязательны' });
     }
     
-    // Поиск пользователя в базе данных
     db.get(
         'SELECT * FROM users WHERE username = ?',
         [username],
@@ -164,14 +282,12 @@ app.post('/api/login', (req, res) => {
                 return res.status(400).json({ success: false, error: 'Неверное имя пользователя или пароль' });
             }
             
-            // Проверка пароля
             const isValidPassword = await bcrypt.compare(password, user.password);
             
             if (!isValidPassword) {
                 return res.status(400).json({ success: false, error: 'Неверное имя пользователя или пароль' });
             }
             
-            // Возвращаем данные пользователя (без пароля)
             const { password: _, ...userWithoutPassword } = user;
             res.json({ 
                 success: true,
@@ -182,7 +298,6 @@ app.post('/api/login', (req, res) => {
     );
 });
 
-// Маршрут для обновления профиля
 app.post('/api/update-profile', (req, res) => {
     const { userId, name, avatar } = req.body;
     
@@ -199,7 +314,6 @@ app.post('/api/update-profile', (req, res) => {
                 return res.status(500).json({ success: false, error: 'Ошибка при обновлении профиля' });
             }
             
-            // Получаем обновленные данные пользователя
             db.get(
                 'SELECT id, username, name, avatar, created_at FROM users WHERE id = ?',
                 [userId],
@@ -219,7 +333,6 @@ app.post('/api/update-profile', (req, res) => {
     );
 });
 
-// Маршрут для получения списка пользователей
 app.get('/api/users', (req, res) => {
     db.all(
         'SELECT id, username, name, avatar, created_at FROM users ORDER BY name',
@@ -234,7 +347,6 @@ app.get('/api/users', (req, res) => {
     );
 });
 
-// Маршрут для отправки сообщения
 app.post('/api/send-message', (req, res) => {
     const { senderId, receiverId, messageText } = req.body;
     
@@ -260,7 +372,6 @@ app.post('/api/send-message', (req, res) => {
     );
 });
 
-// Маршрут для получения сообщений между двумя пользователями
 app.get('/api/messages/:userId1/:userId2', (req, res) => {
     const { userId1, userId2 } = req.params;
     
@@ -279,7 +390,6 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
                 return res.status(500).json({ success: false, error: 'Ошибка при получении сообщений' });
             }
             
-            // Помечаем сообщения как прочитанные
             db.run(
                 'UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0',
                 [userId1, userId2],
@@ -295,9 +405,25 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
     );
 });
 
-// server.js - добавить этот код после других маршрутов
+app.get('/api/check-new-messages/:userId/:contactId', (req, res) => {
+    const { userId, contactId } = req.params;
+    
+    db.get(
+        `SELECT COUNT(*) as count 
+         FROM messages 
+         WHERE (receiver_id = ? AND sender_id = ? AND is_read = 0)`,
+        [userId, contactId],
+        (err, row) => {
+            if (err) {
+                console.error('Ошибка проверки новых сообщений:', err);
+                return res.status(500).json({ success: false, error: 'Ошибка при проверке сообщений' });
+            }
+            
+            res.json({ success: true, hasNewMessages: row.count > 0 });
+        }
+    );
+});
 
-// Маршрут для поиска пользователей
 app.get('/api/search-users', (req, res) => {
     const { query } = req.query;
     
@@ -323,295 +449,6 @@ app.get('/api/search-users', (req, res) => {
     );
 });
 
-// server.js - добавить этот endpoint
-app.get('/api/check-new-messages/:userId/:contactId', (req, res) => {
-    const { userId, contactId } = req.params;
-    
-    db.all(
-        `SELECT COUNT(*) as count 
-         FROM messages 
-         WHERE (receiver_id = ? AND sender_id = ? AND is_read = 0)`,
-        [userId, contactId],
-        (err, row) => {
-            if (err) {
-                console.error('Ошибка проверки новых сообщений:', err);
-                return res.status(500).json({ success: false, error: 'Ошибка при проверке сообщений' });
-            }
-            
-            res.json({ success: true, hasNewMessages: row.count > 0 });
-        }
-    );
-});
-
-// Хранилище активных звонков
-const activeCalls = new Map();
-
-// WebSocket соединения
-const connections = new Map();
-
-wss.on('connection', (ws, request) => {
-    const userId = request.url.split('=')[1]; // /?userId=123
-    connections.set(userId, ws);
-    
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message);
-            handleWebSocketMessage(userId, data);
-        } catch (error) {
-            console.error('WebSocket error:', error);
-        }
-    });
-    
-    ws.on('close', () => {
-        connections.delete(userId);
-        // Удаляем активные звонки пользователя
-        for (const [callId, callData] of activeCalls.entries()) {
-            if (callData.callerId === userId || callData.calleeId === userId) {
-                activeCalls.delete(callId);
-            }
-        }
-    });
-});
-
-function handleWebSocketMessage(userId, data) {
-    switch (data.type) {
-        case 'call-offer':
-            handleCallOffer(userId, data);
-            break;
-        case 'call-answer':
-            handleCallAnswer(userId, data);
-            break;
-        case 'ice-candidate':
-            handleIceCandidate(userId, data);
-            break;
-        case 'call-reject':
-            handleCallReject(userId, data);
-            break;
-        case 'end-call':
-            handleEndCall(userId, data);
-            break;
-    }
-}
-
-function handleCallOffer(callerId, data) {
-    const { calleeId, offer, callId } = data;
-    activeCalls.set(callId, { callerId, calleeId, offer });
-    
-    // Отправляем предложение звонка получателю
-    const calleeWs = connections.get(calleeId);
-    if (calleeWs) {
-        calleeWs.send(JSON.stringify({
-            type: 'incoming-call',
-            callerId,
-            callId,
-            offer,
-            callerName: data.callerName,
-            callerAvatar: data.callerAvatar
-        }));
-    }
-}
-
-function handleCallAnswer(calleeId, data) {
-    const { callId, answer } = data;
-    const callData = activeCalls.get(callId);
-    
-    if (callData) {
-        // Отправляем ответ звонка callerу
-        const callerWs = connections.get(callData.callerId);
-        if (callerWs) {
-            callerWs.send(JSON.stringify({
-                type: 'call-answered',
-                callId,
-                answer,
-                calleeId
-            }));
-        }
-    }
-}
-
-function handleIceCandidate(userId, data) {
-    const { callId, candidate, targetUserId } = data;
-    const targetWs = connections.get(targetUserId);
-    
-    if (targetWs) {
-        targetWs.send(JSON.stringify({
-            type: 'ice-candidate',
-            callId,
-            candidate,
-            userId
-        }));
-    }
-}
-
-function handleCallReject(calleeId, data) {
-    const { callId } = data;
-    const callData = activeCalls.get(callId);
-    
-    if (callData) {
-        // Отправляем отклонение звонка callerу
-        const callerWs = connections.get(callData.callerId);
-        if (callerWs) {
-            callerWs.send(JSON.stringify({
-                type: 'call-rejected',
-                callId
-            }));
-        }
-        activeCalls.delete(callId);
-    }
-}
-
-function handleEndCall(userId, data) {
-    const { callId } = data;
-    const callData = activeCalls.get(callId);
-    
-    if (callData) {
-        // Отправляем завершение звонка другой стороне
-        const targetId = callData.callerId === userId ? callData.calleeId : callData.callerId;
-        const targetWs = connections.get(targetId);
-        
-        if (targetWs) {
-            targetWs.send(JSON.stringify({
-                type: 'call-ended',
-                callId
-            }));
-        }
-        activeCalls.delete(callId);
-    }
-}
-
-// Создаем HTTP сервер для WebSocket
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-// Хранилище подключений
-const userConnections = new Map();
-
-wss.on('connection', (ws, request) => {
-    const urlParams = new URL(request.url, `http://${request.headers.host}`);
-    const userId = urlParams.searchParams.get('userId');
-    
-    if (userId) {
-        userConnections.set(userId, ws);
-        console.log(`User ${userId} connected`);
-    }
-
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message);
-            handleWebSocketMessage(userId, data, ws);
-        } catch (error) {
-            console.error('WebSocket message error:', error);
-        }
-    });
-
-    ws.on('close', () => {
-        if (userId) {
-            userConnections.delete(userId);
-            console.log(`User ${userId} disconnected`);
-        }
-    });
-});
-
-function handleWebSocketMessage(userId, data, ws) {
-    switch (data.type) {
-        case 'call-offer':
-            handleCallOffer(userId, data);
-            break;
-        case 'call-answer':
-            handleCallAnswer(userId, data);
-            break;
-        case 'ice-candidate':
-            handleIceCandidate(userId, data);
-            break;
-        case 'reject-call':
-            handleRejectCall(userId, data);
-            break;
-        case 'end-call':
-            handleEndCall(userId, data);
-            break;
-    }
-}
-
-function handleCallOffer(callerId, data) {
-    const { targetUserId, offer, callerName, callerAvatar } = data;
-    const targetWs = userConnections.get(targetUserId);
-    
-    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-        targetWs.send(JSON.stringify({
-            type: 'incoming-call',
-            callerId,
-            offer,
-            callerName,
-            callerAvatar
-        }));
-    }
-}
-
-function handleCallAnswer(calleeId, data) {
-    const { callerId, answer } = data;
-    const callerWs = userConnections.get(callerId);
-    
-    if (callerWs && callerWs.readyState === WebSocket.OPEN) {
-        callerWs.send(JSON.stringify({
-            type: 'call-answered',
-            answer,
-            calleeId
-        }));
-    }
-}
-
-function handleIceCandidate(userId, data) {
-    const { targetUserId, candidate } = data;
-    const targetWs = userConnections.get(targetUserId);
-    
-    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-        targetWs.send(JSON.stringify({
-            type: 'ice-candidate',
-            candidate,
-            userId
-        }));
-    }
-}
-
-function handleRejectCall(calleeId, data) {
-    const { callerId } = data;
-    const callerWs = userConnections.get(callerId);
-    
-    if (callerWs && callerWs.readyState === WebSocket.OPEN) {
-        callerWs.send(JSON.stringify({
-            type: 'call-rejected'
-        }));
-    }
-}
-
-function handleEndCall(userId, data) {
-    const { targetUserId } = data;
-    const targetWs = userConnections.get(targetUserId);
-    
-    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-        targetWs.send(JSON.stringify({
-            type: 'call-ended'
-        }));
-    }
-}
-
-// Заменяем запуск сервера в конце:
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`WebSocket server running`);
-});
-
-// Пример для PostgreSQL
-const { Pool } = require('pg');
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
-
-app.use(express.static('public'));
-
 // Обслуживание статических файлов
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -624,8 +461,9 @@ app.use((err, req, res, next) => {
 });
 
 // Запуск сервера
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
+    console.log(`WebSocket сервер запущен`);
     console.log(`Откройте в браузере: http://localhost:${PORT}`);
 });
 
@@ -637,10 +475,9 @@ process.on('SIGINT', () => {
             console.error(err.message);
         }
         console.log('Подключение к базе данных закрыто.');
-        process.exit(0);
+        server.close(() => {
+            console.log('Сервер остановлен.');
+            process.exit(0);
+        });
     });
-
 });
-
-
-
