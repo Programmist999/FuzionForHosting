@@ -479,11 +479,126 @@ function handleEndCall(userId, data) {
     }
 }
 
-// Заменяем запуск сервера в конце файла:
+// Создаем HTTP сервер для WebSocket
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+// Хранилище подключений
+const userConnections = new Map();
+
+wss.on('connection', (ws, request) => {
+    const urlParams = new URL(request.url, `http://${request.headers.host}`);
+    const userId = urlParams.searchParams.get('userId');
+    
+    if (userId) {
+        userConnections.set(userId, ws);
+        console.log(`User ${userId} connected`);
+    }
+
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            handleWebSocketMessage(userId, data, ws);
+        } catch (error) {
+            console.error('WebSocket message error:', error);
+        }
+    });
+
+    ws.on('close', () => {
+        if (userId) {
+            userConnections.delete(userId);
+            console.log(`User ${userId} disconnected`);
+        }
+    });
+});
+
+function handleWebSocketMessage(userId, data, ws) {
+    switch (data.type) {
+        case 'call-offer':
+            handleCallOffer(userId, data);
+            break;
+        case 'call-answer':
+            handleCallAnswer(userId, data);
+            break;
+        case 'ice-candidate':
+            handleIceCandidate(userId, data);
+            break;
+        case 'reject-call':
+            handleRejectCall(userId, data);
+            break;
+        case 'end-call':
+            handleEndCall(userId, data);
+            break;
+    }
+}
+
+function handleCallOffer(callerId, data) {
+    const { targetUserId, offer, callerName, callerAvatar } = data;
+    const targetWs = userConnections.get(targetUserId);
+    
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'incoming-call',
+            callerId,
+            offer,
+            callerName,
+            callerAvatar
+        }));
+    }
+}
+
+function handleCallAnswer(calleeId, data) {
+    const { callerId, answer } = data;
+    const callerWs = userConnections.get(callerId);
+    
+    if (callerWs && callerWs.readyState === WebSocket.OPEN) {
+        callerWs.send(JSON.stringify({
+            type: 'call-answered',
+            answer,
+            calleeId
+        }));
+    }
+}
+
+function handleIceCandidate(userId, data) {
+    const { targetUserId, candidate } = data;
+    const targetWs = userConnections.get(targetUserId);
+    
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'ice-candidate',
+            candidate,
+            userId
+        }));
+    }
+}
+
+function handleRejectCall(calleeId, data) {
+    const { callerId } = data;
+    const callerWs = userConnections.get(callerId);
+    
+    if (callerWs && callerWs.readyState === WebSocket.OPEN) {
+        callerWs.send(JSON.stringify({
+            type: 'call-rejected'
+        }));
+    }
+}
+
+function handleEndCall(userId, data) {
+    const { targetUserId } = data;
+    const targetWs = userConnections.get(targetUserId);
+    
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'call-ended'
+        }));
+    }
+}
+
+// Заменяем запуск сервера в конце:
 server.listen(PORT, () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
-    console.log(`WebSocket сервер запущен`);
-    console.log(`Откройте в браузере: http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
+    console.log(`WebSocket server running`);
 });
 
 // Пример для PostgreSQL
@@ -526,5 +641,6 @@ process.on('SIGINT', () => {
     });
 
 });
+
 
 
