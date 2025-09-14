@@ -346,6 +346,8 @@ const pool = new Pool({
   }
 });
 
+app.use(express.static('public'));
+
 // Обслуживание статических файлов
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -375,3 +377,4 @@ process.on('SIGINT', () => {
     });
 
 });
+
