@@ -1954,6 +1954,14 @@
         function endCall() {
             // Останавливаем анализ аудио
             stopAudioAnalysis();
+
+            if (websocket && (isCaller ? currentContact.id : window.incomingCallerId)) {
+                websocket.send(JSON.stringify({
+                    type: 'end-call',
+                    targetUserId: isCaller ? currentContact.id : window.incomingCallerId,
+                    callId: currentCallId  // Убедитесь что это поле есть
+                }));
+            }
             
             if (websocket && currentContact) {
                 const targetId = isCaller ? currentContact.id : window.incomingCallerId;
@@ -1989,52 +1997,52 @@
             stopRingtone();
         }
         
-                async function acceptCall() {
-                    if (!window.incomingOffer) {
-                        showNotification('Ошибка', 'Нет входящего звонка', 'error');
-                        return;
-                    }
+                // async function acceptCall() {
+                //     if (!window.incomingOffer) {
+                //         showNotification('Ошибка', 'Нет входящего звонка', 'error');
+                //         return;
+                //     }
                     
-                    try {
-                        // Получаем медиапоток
-                        audioStream = await navigator.mediaDevices.getUserMedia({ 
-                            audio: {
-                                echoCancellation: true,
-                                noiseSuppression: true,
-                                sampleRate: 44100
-                            },
-                            video: false 
-                        });
+                //     try {
+                //         // Получаем медиапоток
+                //         audioStream = await navigator.mediaDevices.getUserMedia({ 
+                //             audio: {
+                //                 echoCancellation: true,
+                //                 noiseSuppression: true,
+                //                 sampleRate: 44100
+                //             },
+                //             video: false 
+                //         });
                         
-                        // Инициализируем WebRTC
-                        await initializeWebRTC();
+                //         // Инициализируем WebRTC
+                //         await initializeWebRTC();
                         
-                        // Устанавливаем удаленное описание
-                        await peerConnection.setRemoteDescription(window.incomingOffer);
+                //         // Устанавливаем удаленное описание
+                //         await peerConnection.setRemoteDescription(window.incomingOffer);
                         
-                        // Создаем answer
-                        const answer = await peerConnection.createAnswer();
-                        await peerConnection.setLocalDescription(answer);
+                //         // Создаем answer
+                //         const answer = await peerConnection.createAnswer();
+                //         await peerConnection.setLocalDescription(answer);
                         
-                        // Отправляем answer
-                        websocket.send(JSON.stringify({
-                            type: 'call-answer',
-                            callerId: window.incomingCallerId,
-                            answer: answer,
-                            callId: currentCallId
-                        }));
+                //         // Отправляем answer
+                //         websocket.send(JSON.stringify({
+                //             type: 'call-answer',
+                //             callerId: window.incomingCallerId,
+                //             answer: answer,
+                //             callId: currentCallId
+                //         }));
                         
-                        // Скрываем модалку и показываем интерфейс звонка
-                        document.getElementById('incoming-call-modal').classList.remove('active');
-                        showCallInterface();
-                        showNotification('Звонок', 'Соединение установлено', 'success');
-                        stopRingtone();
+                //         // Скрываем модалку и показываем интерфейс звонка
+                //         document.getElementById('incoming-call-modal').classList.remove('active');
+                //         showCallInterface();
+                //         showNotification('Звонок', 'Соединение установлено', 'success');
+                //         stopRingtone();
                         
-                    } catch (error) {
-                        console.error('Ошибка принятия звонка:', error);
-                        showNotification('Ошибка', 'Не удалось принять звонок', 'error');
-                    }
-                }
+                //     } catch (error) {
+                //         console.error('Ошибка принятия звонка:', error);
+                //         showNotification('Ошибка', 'Не удалось принять звонок', 'error');
+                //     }
+                // }
         
                 function rejectCall() {
                     if (websocket && window.incomingCallerId) {
@@ -2051,37 +2059,37 @@
                     stopRingtone();
                 }
         
-                function endCall() {
-                    if (websocket && currentContact) {
-                        websocket.send(JSON.stringify({
-                            type: 'end-call',
-                            targetUserId: isCaller ? currentContact.id : window.incomingCallerId,
-                            callId: currentCallId
-                        }));
-                    }
+                // function endCall() {
+                //     if (websocket && currentContact) {
+                //         websocket.send(JSON.stringify({
+                //             type: 'end-call',
+                //             targetUserId: isCaller ? currentContact.id : window.incomingCallerId,
+                //             callId: currentCallId
+                //         }));
+                //     }
                     
-                    // Закрываем соединение
-                    if (peerConnection) {
-                        peerConnection.close();
-                        peerConnection = null;
-                    }
+                //     // Закрываем соединение
+                //     if (peerConnection) {
+                //         peerConnection.close();
+                //         peerConnection = null;
+                //     }
                     
-                    // Останавливаем медиапоток
-                    if (audioStream) {
-                        audioStream.getTracks().forEach(track => track.stop());
-                        audioStream = null;
-                    }
+                //     // Останавливаем медиапоток
+                //     if (audioStream) {
+                //         audioStream.getTracks().forEach(track => track.stop());
+                //         audioStream = null;
+                //     }
                     
-                    // Скрываем интерфейс звонка
-                    document.getElementById('call-container').classList.remove('active');
+                //     // Скрываем интерфейс звонка
+                //     document.getElementById('call-container').classList.remove('active');
                     
-                    // Сбрасываем переменные
-                    isCaller = false;
-                    currentCallId = null;
-                    window.incomingOffer = null;
-                    window.incomingCallerId = null;
-                    stopRingtone();
-                }
+                //     // Сбрасываем переменные
+                //     isCaller = false;
+                //     currentCallId = null;
+                //     window.incomingOffer = null;
+                //     window.incomingCallerId = null;
+                //     stopRingtone();
+                // }
 
         function showCallInterface() {
             const callContainer = document.getElementById('call-container');
@@ -3074,6 +3082,7 @@
     </script>
 </body>
 </html>
+
 
 
 
