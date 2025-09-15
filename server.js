@@ -31,7 +31,19 @@ wss.on('connection', (ws, request) => {
     
     if (userId) {
         userConnections.set(userId, ws);
+
+        // Отправляем подтверждение подключения
+        ws.send(JSON.stringify({
+            type: 'connection-established',
+            userId: userId
+        }));
     }
+
+    // Добавьте обработчик ping/pong
+    ws.isAlive = true;
+    ws.on('pong', () => {
+        ws.isAlive = true;
+    });
 
     ws.on('message', (message) => {
         try {
@@ -53,6 +65,36 @@ wss.on('connection', (ws, request) => {
         console.error('WebSocket error:', error);
     });
 });
+
+setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (!ws.isAlive) {
+            console.log('Terminating inactive connection');
+            return ws.terminate();
+        }
+        
+        ws.isAlive = false;
+        ws.ping(() => {});
+    });
+}, 30000);
+
+setInterval(() => {
+    const now = Date.now();
+    const timeout = 30000; // 30 секунд
+    
+    // Очищаем неактивные звонки
+    for (const [callId, callInfo] of activeCalls.entries()) {
+        if (now - callInfo.timestamp > timeout) {
+            activeCalls.delete(callId);
+            console.log('Cleaned up inactive call:', callId);
+        }
+    }
+    
+    // Проверяем соединения
+    console.log('Active WebSocket connections:', userConnections.size);
+    console.log('Active users:', Array.from(userConnections.keys()));
+    
+},60000);// Каждую минуту
 
 function handleWebSocketMessage(userId, data) {
     console.log('Received message:', data.type, 'from:', userId);
@@ -504,5 +546,6 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
