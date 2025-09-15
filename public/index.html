@@ -1522,6 +1522,10 @@
         let peerConnection = null;
         let currentCallId = null;
         let isCaller = false;
+        let peerConnection = null;
+        let isInitiator = false;
+        let isCallActive = false;
+        let currentCallId = null;
 
         // Базовый URL API
         const API_BASE_URL = window.location.origin;
@@ -1544,28 +1548,45 @@
             ]
         };
 
+        // Улучшенная инициализация WebRTC
         async function initializeWebRTC() {
             try {
+                // Закрываем предыдущее соединение, если есть
+                if (peerConnection) {
+                    peerConnection.close();
+                }
+                
                 peerConnection = new RTCPeerConnection(configuration);
                 
                 // Обработка ICE кандидатов
                 peerConnection.onicecandidate = (event) => {
                     if (event.candidate && websocket) {
+                        console.log('Sending ICE candidate');
                         websocket.send(JSON.stringify({
                             type: 'ice-candidate',
-                            callId: currentCallId,
+                            targetUserId: isInitiator ? currentContact.id : window.incomingCallerId,
                             candidate: event.candidate,
-                            targetUserId: isCaller ? currentContact.id : currentUser.id
+                            callId: currentCallId
                         }));
                     }
                 };
                 
                 // Обработка входящих потоков
                 peerConnection.ontrack = (event) => {
-                    console.log('Received remote stream');
+                    console.log('Received remote stream, tracks:', event.streams[0].getTracks().length);
                     const remoteAudio = document.getElementById('remote-audio');
                     if (remoteAudio && event.streams[0]) {
                         remoteAudio.srcObject = event.streams[0];
+                        // Запускаем анализ удаленного аудио
+                        setTimeout(setupRemoteAudioAnalysis, 1000);
+                    }
+                };
+                
+                // Обработка изменения состояния соединения
+                peerConnection.onconnectionstatechange = () => {
+                    console.log('Connection state:', peerConnection.connectionState);
+                    if (peerConnection.connectionState === 'connected') {
+                        showNotification('Звонок', 'Соединение установлено', 'success');
                     }
                 };
                 
@@ -1665,27 +1686,45 @@
             playRingtone();
         }
 
-        async function handleCallAnswered(data) {
-            const { answer } = data;
+        async function handleIncomingCall(data) {
+            const { callerId, offer, callerName, callerAvatar, callId } = data;
             
-            if (peerConnection && isCaller) {
-                try {
-                    await peerConnection.setRemoteDescription(answer);
-                    showNotification('Звонок', 'Собеседник ответил на звонок', 'success');
-                    stopRingtone();
-                } catch (error) {
-                    console.error('Error setting remote description:', error);
+            // Сохраняем данные звонка
+            window.incomingOffer = offer;
+            window.incomingCallerId = callerId;
+            window.incomingCallId = callId;
+            
+            // Показываем модалку входящего звонка
+            document.getElementById('caller-name').textContent = callerName || 'Неизвестный';
+            document.getElementById('caller-avatar').src = callerAvatar || './free-icon-user-avatar-3607444.png';
+            document.getElementById('incoming-call-modal').classList.add('active');
+            
+            // Проигрываем звук звонка
+            playRingtone();
+            
+            // Автоматически отклоняем звонок через 30 секунд
+            clearTimeout(window.callTimeout);
+            window.callTimeout = setTimeout(() => {
+                if (document.getElementById('incoming-call-modal').classList.contains('active')) {
+                    rejectCall();
+                    showNotification('Звонок', 'Входящий звонок пропущен', 'info');
                 }
-            }
+            }, 30000);
         }
 
         async function handleIceCandidate(data) {
-            const { candidate } = data;
+            const { candidate, userId, callId } = data;
+            
+            // Проверяем, что это кандидат для текущего звонка
+            if (callId !== currentCallId) {
+                console.log('ICE candidate for different call, ignoring');
+                return;
+            }
             
             if (peerConnection && candidate) {
                 try {
-                    await peerConnection.addIceCandidate(candidate);
-                    console.log('Added ICE candidate');
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log('ICE candidate added successfully from user:', userId);
                 } catch (error) {
                     console.error('Error adding ICE candidate:', error);
                 }
@@ -1870,6 +1909,9 @@
                 // Инициализируем WebRTC
                 await initializeWebRTC();
                 
+                isInitiator = true;
+                currentCallId = Date.now().toString();
+                
                 // Создаем offer
                 const offer = await peerConnection.createOffer({
                     offerToReceiveAudio: true,
@@ -1877,9 +1919,6 @@
                 });
                 
                 await peerConnection.setLocalDescription(offer);
-                
-                isCaller = true;
-                currentCallId = Date.now().toString();
                 
                 // Отправляем offer через WebSocket
                 websocket.send(JSON.stringify({
@@ -1897,7 +1936,7 @@
                 
             } catch (error) {
                 console.error('Ошибка начала звонка:', error);
-                showNotification('Ошибка', 'Не удалось начать звонок: ' + error.message, 'error');
+                showNotification('Ошибка', 'Не удалось начать звонок', 'error');
             }
         }
         
@@ -1917,12 +1956,16 @@
                     },
                     video: false 
                 });
+
+                isCallActive = true;
                 
                 // Запускаем анализ аудио
                 startAudioAnalysis();
                 
                 // Инициализируем WebRTC
                 await initializeWebRTC();
+                
+                isInitiator = false;
                 
                 // Устанавливаем удаленное описание
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
@@ -1936,8 +1979,10 @@
                     type: 'call-answer',
                     callerId: window.incomingCallerId,
                     answer: answer,
-                    callId: currentCallId
+                    callId: window.incomingCallId
                 }));
+                
+                currentCallId = window.incomingCallId;
                 
                 // Скрываем модалку и показываем интерфейс звонка
                 document.getElementById('incoming-call-modal').classList.remove('active');
@@ -1952,19 +1997,17 @@
         }
         
         function endCall() {
+            console.log('Ending call, isInitiator:', isInitiator, 'currentCallId:', currentCallId);
+
+            isCallActive = false;
+            
             // Останавливаем анализ аудио
             stopAudioAnalysis();
-
-            if (websocket && (isCaller ? currentContact.id : window.incomingCallerId)) {
-                websocket.send(JSON.stringify({
-                    type: 'end-call',
-                    targetUserId: isCaller ? currentContact.id : window.incomingCallerId,
-                    callId: currentCallId  // Убедитесь что это поле есть
-                }));
-            }
+            stopRemoteAudioAnalysis();
             
-            if (websocket && currentContact) {
-                const targetId = isCaller ? currentContact.id : window.incomingCallerId;
+            // Отправляем сообщение о завершении звонка
+            if (websocket && websocket.readyState === WebSocket.OPEN && currentCallId) {
+                const targetId = isInitiator ? currentContact.id : window.incomingCallerId;
                 if (targetId) {
                     websocket.send(JSON.stringify({
                         type: 'end-call',
@@ -1986,15 +2029,26 @@
                 audioStream = null;
             }
             
-            // Скрываем интерфейс звонка
-            document.getElementById('call-container').classList.remove('active');
-            
-            // Сбрасываем переменные
-            isCaller = false;
+            // Сбрасываем состояние
+            isCallActive = false;
+            isInitiator = false;
             currentCallId = null;
             window.incomingOffer = null;
             window.incomingCallerId = null;
+            window.incomingCallId = null;
+            
+            // Скрываем интерфейс звонка
+            document.getElementById('call-container').classList.remove('active');
+            document.getElementById('incoming-call-modal').classList.remove('active');
+            
             stopRingtone();
+            clearTimeout(window.callTimeout);
+            
+            // Восстанавливаем нормальный интерфейс
+            document.getElementById('message-input').disabled = !currentContact;
+            document.getElementById('send-btn').disabled = !currentContact;
+            
+            showNotification('Звонок', 'Звонок завершен', 'info');
         }
         
                 // async function acceptCall() {
@@ -2094,10 +2148,15 @@
         function showCallInterface() {
             const callContainer = document.getElementById('call-container');
             callContainer.classList.add('active');
+            isCallActive = true;
             
             // Обновляем информацию о собеседнике
             document.getElementById('contact-call-name').textContent = currentContact.name || currentContact.username;
             document.getElementById('contact-call-avatar').src = currentContact.avatar || './free-icon-user-avatar-3607444.png';
+            
+            // Обновляем свою информацию
+            document.getElementById('user-call-name').textContent = currentUser.name || currentUser.username;
+            document.getElementById('user-call-avatar').src = currentUser.avatar || './free-icon-user-avatar-3607444.png';
         }
 
         // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ЗВОНКОВ =====
@@ -3082,6 +3141,7 @@
     </script>
 </body>
 </html>
+
 
 
 
