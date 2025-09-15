@@ -6,6 +6,7 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
+const activeCalls = new Map();
 
 const app = express();
 const server = http.createServer(app);
@@ -76,44 +77,52 @@ function handleWebSocketMessage(userId, data) {
 }
 
 function handleCallOffer(callerId, data) {
-    const { targetUserId, offer, callerName, callerAvatar } = data;
-    console.log('Call offer from', callerId, 'to', targetUserId);
-    console.log('Active connections:', Array.from(userConnections.keys()));
+    const { targetUserId, offer, callerName, callerAvatar, callId } = data;
+    console.log('Call offer from', callerId, 'to', targetUserId, 'callId:', callId);
     
-    const targetWs = userConnections.get(targetUserId.toString()); // Преобразуем в строку
+    // Сохраняем информацию о звонке
+    activeCalls.set(callId, {
+        callerId: callerId.toString(),
+        targetUserId: targetUserId.toString(),
+        timestamp: Date.now()
+    });
+    
+    const targetWs = userConnections.get(targetUserId.toString());
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
             type: 'incoming-call',
             callerId: callerId,
             offer: offer,
             callerName: callerName,
-            callerAvatar: callerAvatar
+            callerAvatar: callerAvatar,
+            callId: callId // Важно передавать callId
         }));
         console.log('Call offer sent to', targetUserId);
     } else {
         console.log('Target user not connected:', targetUserId);
-        // Отправляем ошибку вызывающему абоненту
-        const callerWs = userConnections.get(callerId.toString());
-        if (callerWs && callerWs.readyState === WebSocket.OPEN) {
-            callerWs.send(JSON.stringify({
-                type: 'call-error',
-                error: 'USER_NOT_CONNECTED',
-                message: 'Пользователь не в сети'
-            }));
-        }
+        // Удаляем несостоявшийся звонок
+        activeCalls.delete(callId);
     }
 }
 
 function handleCallAnswer(calleeId, data) {
-    const { callerId, answer } = data;
-    console.log('Call answer from', calleeId, 'to', callerId);
+    const { callerId, answer, callId } = data;
+    console.log('Call answer from', calleeId, 'to', callerId, 'callId:', callId);
     
-    const callerWs = userConnections.get(callerId);
+    // Проверяем, что это ответ на существующий звонок
+    const callInfo = activeCalls.get(callId);
+    if (!callInfo || callInfo.callerId !== callerId.toString() || callInfo.targetUserId !== calleeId.toString()) {
+        console.log('Invalid call answer for callId:', callId);
+        return;
+    }
+    
+    const callerWs = userConnections.get(callerId.toString());
     if (callerWs && callerWs.readyState === WebSocket.OPEN) {
         callerWs.send(JSON.stringify({
             type: 'call-answered',
             answer: answer,
-            calleeId: calleeId
+            calleeId: calleeId,
+            callId: callId
         }));
     }
 }
@@ -143,12 +152,16 @@ function handleRejectCall(calleeId, data) {
 }
 
 function handleEndCall(userId, data) {
-    const { targetUserId } = data;
+    const { targetUserId, callId } = data;
     
-    const targetWs = userConnections.get(targetUserId);
+    // Удаляем информацию о звонке
+    activeCalls.delete(callId);
+    
+    const targetWs = userConnections.get(targetUserId.toString());
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
-            type: 'call-ended'
+            type: 'call-ended',
+            callId: callId
         }));
     }
 }
@@ -491,4 +504,5 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
