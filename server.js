@@ -66,6 +66,33 @@ wss.on('connection', (ws, request) => {
     });
 });
 
+// Обработка закрытия соединения
+ws.on('close', () => {
+    console.log('User disconnected:', userId);
+    if (userId) {
+        userConnections.delete(userId.toString());
+        
+        // Завершаем все активные звонки пользователя
+        for (const [callId, callInfo] of activeCalls.entries()) {
+            if (callInfo.callerId === userId.toString() || callInfo.targetUserId === userId.toString()) {
+                activeCalls.delete(callId);
+                
+                // Уведомляем второго участника
+                const otherUserId = callInfo.callerId === userId.toString() ? 
+                                  callInfo.targetUserId : callInfo.callerId;
+                const otherWs = userConnections.get(otherUserId);
+                
+                if (otherWs && otherWs.readyState === WebSocket.OPEN) {
+                    otherWs.send(JSON.stringify({
+                        type: 'call-ended',
+                        reason: 'USER_DISCONNECTED'
+                    }));
+                }
+            }
+        }
+    }
+});
+
 setInterval(() => {
     wss.clients.forEach((ws) => {
         if (!ws.isAlive) {
@@ -546,6 +573,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
