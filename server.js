@@ -78,8 +78,9 @@ function handleWebSocketMessage(userId, data) {
 function handleCallOffer(callerId, data) {
     const { targetUserId, offer, callerName, callerAvatar } = data;
     console.log('Call offer from', callerId, 'to', targetUserId);
+    console.log('Active connections:', Array.from(userConnections.keys()));
     
-    const targetWs = userConnections.get(targetUserId);
+    const targetWs = userConnections.get(targetUserId.toString()); // Преобразуем в строку
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
             type: 'incoming-call',
@@ -91,6 +92,15 @@ function handleCallOffer(callerId, data) {
         console.log('Call offer sent to', targetUserId);
     } else {
         console.log('Target user not connected:', targetUserId);
+        // Отправляем ошибку вызывающему абоненту
+        const callerWs = userConnections.get(callerId.toString());
+        if (callerWs && callerWs.readyState === WebSocket.OPEN) {
+            callerWs.send(JSON.stringify({
+                type: 'call-error',
+                error: 'USER_NOT_CONNECTED',
+                message: 'Пользователь не в сети'
+            }));
+        }
     }
 }
 
@@ -108,16 +118,16 @@ function handleCallAnswer(calleeId, data) {
     }
 }
 
-function handleIceCandidate(userId, data) {
-    const { targetUserId, candidate } = data;
+async function handleIceCandidate(data) {
+    const { candidate, userId } = data;
     
-    const targetWs = userConnections.get(targetUserId);
-    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-        targetWs.send(JSON.stringify({
-            type: 'ice-candidate',
-            candidate: candidate,
-            userId: userId
-        }));
+    if (peerConnection && candidate) {
+        try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('ICE candidate added successfully');
+        } catch (error) {
+            console.error('Error adding ICE candidate:', error);
+        }
     }
 }
 
@@ -481,3 +491,4 @@ process.on('SIGINT', () => {
         });
     });
 });
+
