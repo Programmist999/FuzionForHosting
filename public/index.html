@@ -1706,6 +1706,71 @@
 
         // ===== ОСНОВНЫЕ ФУНКЦИИ ЗВОНКОВ =====
 
+        function setupRemoteAudioAnalysis() {
+            const remoteAudio = document.getElementById('remote-audio');
+            if (!remoteAudio || !remoteAudio.srcObject) return;
+            
+            try {
+                const remoteAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const remoteAnalyser = remoteAudioContext.createAnalyser();
+                const remoteSource = remoteAudioContext.createMediaStreamSource(remoteAudio.srcObject);
+                remoteSource.connect(remoteAnalyser);
+                
+                remoteAnalyser.fftSize = 256;
+                const bufferLength = remoteAnalyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                function updateRemoteVolume() {
+                    if (!remoteAnalyser) return;
+                    
+                    remoteAnalyser.getByteFrequencyData(dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        sum += dataArray[i];
+                    }
+                    let average = sum / bufferLength;
+                    
+                    // Обновляем индикатор громкости собеседника
+                    const contactVolume = document.getElementById('contact-volume');
+                    if (contactVolume) {
+                        contactVolume.style.width = Math.min(average * 2, 100) + '%';
+                    }
+                    
+                    // Обновляем статус собеседника
+                    const contactStatus = document.getElementById('contact-status');
+                    if (contactStatus) {
+                        if (average > 5) {
+                            contactStatus.textContent = 'Говорит';
+                            document.getElementById('contact-pulse').style.animation = 'pulse 2s infinite';
+                        } else {
+                            contactStatus.textContent = 'В сети';
+                            document.getElementById('contact-pulse').style.animation = 'none';
+                        }
+                    }
+                    
+                    if (isCallActive) {
+                        requestAnimationFrame(updateRemoteVolume);
+                    }
+                }
+                
+                updateRemoteVolume();
+            } catch (error) {
+                console.error('Remote audio analysis error:', error);
+            }
+        }
+        
+        // Обновите обработку удалённого потока
+        peerConnection.ontrack = (event) => {
+            console.log('Received remote stream');
+            const remoteAudio = document.getElementById('remote-audio');
+            if (remoteAudio && event.streams[0]) {
+                remoteAudio.srcObject = event.streams[0];
+                
+                // Запускаем анализ удалённого аудио
+                setTimeout(setupRemoteAudioAnalysis, 1000);
+            }
+        };
+
         // Функция для запуска анализа аудио
         function startAudioAnalysis() {
             if (!audioStream) return;
@@ -2925,4 +2990,5 @@
     </script>
 </body>
 </html>
+
 
