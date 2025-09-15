@@ -23,6 +23,7 @@ app.use(express.static('public'));
 const userConnections = new Map();
 
 // WebSocket обработка
+// WebSocket обработка
 wss.on('connection', (ws, request) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
     const userId = url.searchParams.get('userId');
@@ -30,20 +31,8 @@ wss.on('connection', (ws, request) => {
     console.log('User connected:', userId);
     
     if (userId) {
-        userConnections.set(userId, ws);
-
-        // Отправляем подтверждение подключения
-        ws.send(JSON.stringify({
-            type: 'connection-established',
-            userId: userId
-        }));
+        userConnections.set(userId.toString(), ws);
     }
-
-    // Добавьте обработчик ping/pong
-    ws.isAlive = true;
-    ws.on('pong', () => {
-        ws.isAlive = true;
-    });
 
     ws.on('message', (message) => {
         try {
@@ -57,7 +46,7 @@ wss.on('connection', (ws, request) => {
     ws.on('close', () => {
         console.log('User disconnected:', userId);
         if (userId) {
-            userConnections.delete(userId);
+            userConnections.delete(userId.toString());
         }
     });
 
@@ -65,63 +54,6 @@ wss.on('connection', (ws, request) => {
         console.error('WebSocket error:', error);
     });
 });
-
-// Обработка закрытия соединения
-ws.on('close', () => {
-    console.log('User disconnected:', userId);
-    if (userId) {
-        userConnections.delete(userId.toString());
-        
-        // Завершаем все активные звонки пользователя
-        for (const [callId, callInfo] of activeCalls.entries()) {
-            if (callInfo.callerId === userId.toString() || callInfo.targetUserId === userId.toString()) {
-                activeCalls.delete(callId);
-                
-                // Уведомляем второго участника
-                const otherUserId = callInfo.callerId === userId.toString() ? 
-                                  callInfo.targetUserId : callInfo.callerId;
-                const otherWs = userConnections.get(otherUserId);
-                
-                if (otherWs && otherWs.readyState === WebSocket.OPEN) {
-                    otherWs.send(JSON.stringify({
-                        type: 'call-ended',
-                        reason: 'USER_DISCONNECTED'
-                    }));
-                }
-            }
-        }
-    }
-});
-
-setInterval(() => {
-    wss.clients.forEach((ws) => {
-        if (!ws.isAlive) {
-            console.log('Terminating inactive connection');
-            return ws.terminate();
-        }
-        
-        ws.isAlive = false;
-        ws.ping(() => {});
-    });
-}, 30000);
-
-setInterval(() => {
-    const now = Date.now();
-    const timeout = 30000; // 30 секунд
-    
-    // Очищаем неактивные звонки
-    for (const [callId, callInfo] of activeCalls.entries()) {
-        if (now - callInfo.timestamp > timeout) {
-            activeCalls.delete(callId);
-            console.log('Cleaned up inactive call:', callId);
-        }
-    }
-    
-    // Проверяем соединения
-    console.log('Active WebSocket connections:', userConnections.size);
-    console.log('Active users:', Array.from(userConnections.keys()));
-    
-},60000);// Каждую минуту
 
 function handleWebSocketMessage(userId, data) {
     console.log('Received message:', data.type, 'from:', userId);
@@ -164,13 +96,23 @@ function handleCallOffer(callerId, data) {
             offer: offer,
             callerName: callerName,
             callerAvatar: callerAvatar,
-            callId: callId // Важно передавать callId
+            callId: callId
         }));
         console.log('Call offer sent to', targetUserId);
     } else {
         console.log('Target user not connected:', targetUserId);
         // Удаляем несостоявшийся звонок
         activeCalls.delete(callId);
+        
+        // Отправляем ошибку вызывающему
+        const callerWs = userConnections.get(callerId.toString());
+        if (callerWs) {
+            callerWs.send(JSON.stringify({
+                type: 'call-error',
+                error: 'USER_OFFLINE',
+                message: 'Пользователь не в сети'
+            }));
+        }
     }
 }
 
@@ -180,8 +122,8 @@ function handleCallAnswer(calleeId, data) {
     
     // Проверяем, что это ответ на существующий звонок
     const callInfo = activeCalls.get(callId);
-    if (!callInfo || callInfo.callerId !== callerId.toString() || callInfo.targetUserId !== calleeId.toString()) {
-        console.log('Invalid call answer for callId:', callId);
+    if (!callInfo) {
+        console.log('Call not found:', callId);
         return;
     }
     
@@ -196,26 +138,29 @@ function handleCallAnswer(calleeId, data) {
     }
 }
 
-async function handleIceCandidate(data) {
-    const { candidate, userId } = data;
+function handleIceCandidate(userId, data) {
+    const { targetUserId, candidate } = data;
+    console.log('ICE candidate from', userId, 'to', targetUserId);
     
-    if (peerConnection && candidate) {
-        try {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-            console.log('ICE candidate added successfully');
-        } catch (error) {
-            console.error('Error adding ICE candidate:', error);
-        }
+    const targetWs = userConnections.get(targetUserId.toString());
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'ice-candidate',
+            candidate: candidate,
+            userId: userId
+        }));
     }
 }
 
 function handleRejectCall(calleeId, data) {
     const { callerId } = data;
+    console.log('Call rejected by', calleeId, 'for caller', callerId);
     
-    const callerWs = userConnections.get(callerId);
+    const callerWs = userConnections.get(callerId.toString());
     if (callerWs && callerWs.readyState === WebSocket.OPEN) {
         callerWs.send(JSON.stringify({
-            type: 'call-rejected'
+            type: 'call-rejected',
+            calleeId: calleeId
         }));
     }
 }
@@ -223,8 +168,18 @@ function handleRejectCall(calleeId, data) {
 function handleEndCall(userId, data) {
     const { targetUserId, callId } = data;
     
+    console.log('End call from', userId, 'to', targetUserId, 'callId:', callId);
+    
+    // Проверяем что targetUserId существует
+    if (!targetUserId) {
+        console.error('Target user ID is missing in end-call message');
+        return;
+    }
+    
     // Удаляем информацию о звонке
-    activeCalls.delete(callId);
+    if (callId) {
+        activeCalls.delete(callId);
+    }
     
     const targetWs = userConnections.get(targetUserId.toString());
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
@@ -573,6 +528,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
