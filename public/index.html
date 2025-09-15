@@ -2278,6 +2278,90 @@
                 return false;
             }
         }
+
+        // Добавьте переподключение при потере соединения
+        function connectWebSocket() {
+            if (!currentUser) return;
+            
+            try {
+                websocket = new WebSocket(`${WS_URL}?userId=${currentUser.id}`);
+                
+                websocket.onopen = () => {
+                    console.log('WebSocket connected');
+                    // Восстанавливаем состояние после переподключения
+                    if (currentContact) {
+                        loadMessages();
+                    }
+                };
+                
+                websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'connection-established') {
+                            console.log('WebSocket connection confirmed');
+                            return;
+                        }
+                        handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.error('WebSocket message parse error:', error);
+                    }
+                };
+                
+                websocket.onclose = (event) => {
+                    console.log('WebSocket disconnected:', event.code, event.reason);
+                    
+                    // Завершаем активный звонок при разрыве соединения
+                    if (isCallActive) {
+                        endCall();
+                        showNotification('Соединение', 'Соединение прервано', 'error');
+                    }
+                    
+                    // Переподключение через 3 секунды
+                    setTimeout(connectWebSocket, 3000);
+                };
+                
+                websocket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+                
+            } catch (error) {
+                console.error('WebSocket connection error:', error);
+                setTimeout(connectWebSocket, 3000);
+            }
+        }
+        
+        // Добавьте обработку очистки состояния
+        function cleanupAfterCall() {
+            // Останавливаем анализ аудио
+            stopAudioAnalysis();
+            
+            // Сбрасываем состояние звонка
+            isCallActive = false;
+            isCaller = false;
+            currentCallId = null;
+            window.incomingOffer = null;
+            window.incomingCallerId = null;
+            
+            // Закрываем соединение
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            // Останавливаем медиапоток
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
+            }
+            
+            // Скрываем интерфейс звонка
+            document.getElementById('call-container').classList.remove('active');
+            stopRingtone();
+            
+            // Восстанавливаем нормальный интерфейс
+            document.getElementById('message-input').disabled = false;
+            document.getElementById('send-btn').disabled = false;
+        }
         
         // ===== ОСНОВНЫЕ ФУНКЦИИ ПРИЛОЖЕНИЯ =====
         function initializeApp() {
@@ -2990,5 +3074,6 @@
     </script>
 </body>
 </html>
+
 
 
