@@ -7,6 +7,7 @@ const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
 const activeCalls = new Map();
+const activeChannels = new Map();
 
 const app = express();
 const server = http.createServer(app);
@@ -78,14 +79,15 @@ function handleWebSocketMessage(userId, data) {
 }
 
 function handleCallOffer(callerId, data) {
-    const { targetUserId, offer, callerName, callerAvatar, callId } = data;
-    console.log('Call offer from', callerId, 'to', targetUserId, 'callId:', callId);
+    const { targetUserId, offer, callerName, callerAvatar, channelId } = data;
+    console.log('Call offer from', callerId, 'to', targetUserId, 'channel:', channelId);
     
-    // Сохраняем информацию о звонке
-    activeCalls.set(callId, {
+    // Создаем канал
+    activeChannels.set(channelId, {
         callerId: callerId.toString(),
         targetUserId: targetUserId.toString(),
-        timestamp: Date.now()
+        callerOffer: offer,
+        createdAt: Date.now()
     });
     
     const targetWs = userConnections.get(targetUserId.toString());
@@ -96,34 +98,22 @@ function handleCallOffer(callerId, data) {
             offer: offer,
             callerName: callerName,
             callerAvatar: callerAvatar,
-            callId: callId
+            channelId: channelId
         }));
         console.log('Call offer sent to', targetUserId);
     } else {
         console.log('Target user not connected:', targetUserId);
-        // Удаляем несостоявшийся звонок
-        activeCalls.delete(callId);
-        
-        // Отправляем ошибку вызывающему
-        const callerWs = userConnections.get(callerId.toString());
-        if (callerWs) {
-            callerWs.send(JSON.stringify({
-                type: 'call-error',
-                error: 'USER_OFFLINE',
-                message: 'Пользователь не в сети'
-            }));
-        }
+        activeChannels.delete(channelId);
     }
 }
 
 function handleCallAnswer(calleeId, data) {
-    const { callerId, answer, callId } = data;
-    console.log('Call answer from', calleeId, 'to', callerId, 'callId:', callId);
+    const { callerId, answer, channelId } = data;
+    console.log('Call answer from', calleeId, 'to', callerId, 'channel:', channelId);
     
-    // Проверяем, что это ответ на существующий звонок
-    const callInfo = activeCalls.get(callId);
-    if (!callInfo) {
-        console.log('Call not found:', callId);
+    const channel = activeChannels.get(channelId);
+    if (!channel) {
+        console.log('Channel not found:', channelId);
         return;
     }
     
@@ -133,21 +123,21 @@ function handleCallAnswer(calleeId, data) {
             type: 'call-answered',
             answer: answer,
             calleeId: calleeId,
-            callId: callId
+            channelId: channelId
         }));
     }
 }
 
 function handleIceCandidate(userId, data) {
-    const { targetUserId, candidate } = data;
-    console.log('ICE candidate from', userId, 'to', targetUserId);
+    const { targetUserId, candidate, channelId } = data;
     
     const targetWs = userConnections.get(targetUserId.toString());
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
             type: 'ice-candidate',
             candidate: candidate,
-            userId: userId
+            userId: userId,
+            channelId: channelId
         }));
     }
 }
@@ -166,29 +156,30 @@ function handleRejectCall(calleeId, data) {
 }
 
 function handleEndCall(userId, data) {
-    const { targetUserId, callId } = data;
+    const { targetUserId, channelId } = data;
+    console.log('End call from', userId, 'channel:', channelId);
     
-    console.log('End call from', userId, 'to', targetUserId, 'callId:', callId);
-    
-    // Проверяем что targetUserId существует
-    if (!targetUserId) {
-        console.error('Target user ID is missing in end-call message');
-        return;
-    }
-    
-    // Удаляем информацию о звонке
-    if (callId) {
-        activeCalls.delete(callId);
-    }
+    // Удаляем канал
+    activeChannels.delete(channelId);
     
     const targetWs = userConnections.get(targetUserId.toString());
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
             type: 'call-ended',
-            callId: callId
+            channelId: channelId
         }));
     }
 }
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [channelId, channel] of activeChannels.entries()) {
+        if (now - channel.createdAt > 300000) { // 5 минут
+            activeChannels.delete(channelId);
+            console.log('Cleaned up old channel:', channelId);
+        }
+    }
+}, 60000);
 
 // Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
@@ -528,6 +519,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
