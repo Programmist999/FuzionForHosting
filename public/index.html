@@ -1555,7 +1555,7 @@
             
             while (retryCount < maxRetries) {
                 try {
-                    await peerConnection.setRemoteDescription(sessionDescription);
+                    await window.peerConnection.setRemoteDescription(sessionDescription);
                     console.log('Remote description set successfully on attempt', retryCount + 1);
                     return true;
                 } catch (error) {
@@ -1563,7 +1563,6 @@
                     retryCount++;
                     
                     if (retryCount < maxRetries) {
-                        // Ждем перед повторной попыткой
                         await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
                     }
                 }
@@ -1571,72 +1570,96 @@
             
             throw new Error('Failed to set remote description after retries');
         }
-        
+
+        async function checkAudioCodecs() {
+            if (!window.peerConnection) return;
+            
+            try {
+                const senders = window.peerConnection.getSenders();
+                console.log('Audio senders:', senders.length);
+                
+                const receivers = window.peerConnection.getReceivers();
+                console.log('Audio receivers:', receivers.length);
+                
+                // Проверяем поддерживаемые кодексы
+                const capabilities = RTCRtpSender.getCapabilities('audio');
+                console.log('Supported audio codecs:', capabilities.codecs.map(c => c.mimeType));
+                
+            } catch (error) {
+                console.error('Error checking codecs:', error);
+            }
+        }
+                
         async function initializeWebRTC() {
             try {
                 // Закрываем предыдущее соединение
-                if (peerConnection) {
-                    peerConnection.close();
+                if (window.peerConnection) {
+                    window.peerConnection.close();
                 }
                 
-                peerConnection = new RTCPeerConnection(configuration);
+                // Создаем новое соединение
+                window.peerConnection = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                });
                 
-                // Обработка ICE кандидатов
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate && websocket) {
-                        console.log('Sending ICE candidate');
-                        websocket.send(JSON.stringify({
-                            type: 'ice-candidate',
-                            targetUserId: isCaller ? currentContact.id : window.incomingCallerId,
-                            candidate: event.candidate,
-                            callId: currentCallId
-                        }));
+                console.log('WebRTC connection created');
+                
+                // Обработчики событий - проверяем что peerConnection существует
+                if (window.peerConnection) {
+                    window.peerConnection.onicecandidate = (event) => {
+                        if (event.candidate && websocket) {
+                            console.log('Sending ICE candidate');
+                            websocket.send(JSON.stringify({
+                                type: 'ice-candidate',
+                                targetUserId: isCaller ? currentContact.id : window.incomingCallerId,
+                                candidate: event.candidate,
+                                callId: currentCallId
+                            }));
+                        }
+                    };
+                    
+                    window.peerConnection.ontrack = (event) => {
+                        console.log('Received remote stream, tracks:', event.streams[0].getTracks().length);
+                        const remoteAudio = document.getElementById('remote-audio');
+                        if (remoteAudio && event.streams[0]) {
+                            remoteAudio.srcObject = event.streams[0];
+                            // Запускаем анализ удаленного аудио
+                            setTimeout(setupRemoteAudioAnalysis, 1000);
+                        }
+                    };
+                    
+                    // Добавляем обработчики состояния
+                    window.peerConnection.onsignalingstatechange = () => {
+                        console.log('Signaling state changed to:', window.peerConnection.signalingState);
+                    };
+                    
+                    window.peerConnection.onconnectionstatechange = () => {
+                        console.log('Connection state:', window.peerConnection.connectionState);
+                        if (window.peerConnection.connectionState === 'connected') {
+                            showNotification('Звонок', 'Соединение установлено', 'success');
+                            // Проверяем аудио потоки после соединения
+                            setTimeout(checkAudioStreams, 1000);
+                        }
+                    };
+                    
+                    // Добавляем локальный поток
+                    if (audioStream) {
+                        audioStream.getTracks().forEach(track => {
+                            window.peerConnection.addTrack(track, audioStream);
+                        });
+                        console.log('Local tracks added to peer connection');
                     }
-                };
-                
-                // Обработка входящих потоков
-                peerConnection.ontrack = (event) => {
-                    console.log('Received remote stream, tracks:', event.streams[0].getTracks().length);
-                    const remoteAudio = document.getElementById('remote-audio');
-                    if (remoteAudio && event.streams[0]) {
-                        remoteAudio.srcObject = event.streams[0];
-                        // Запускаем анализ удаленного аудио
-                        setTimeout(setupRemoteAudioAnalysis, 1000);
-                    }
-                };
-                
-                // Обработка изменения состояния соединения
-                peerConnection.onconnectionstatechange = () => {
-                    console.log('Connection state:', peerConnection.connectionState);
-                    if (peerConnection.connectionState === 'connected') {
-                        showNotification('Звонок', 'Соединение установлено', 'success');
-                    } else if (peerConnection.connectionState === 'disconnected' || 
-                               peerConnection.connectionState === 'failed') {
-                        endCall();
-                        showNotification('Звонок', 'Соединение прервано', 'error');
-                    }
-                };
-
-                window.peerConnection.onsignalingstatechange = () => {
-                    console.log('Signaling state changed to:', window.peerConnection.signalingState);
-                };
-                
-                window.peerConnection.onnegotiationneeded = async () => {
-                    console.log('Negotiation needed');
-                };
-                
-                // Добавляем локальный поток
-                if (audioStream) {
-                    audioStream.getTracks().forEach(track => {
-                        peerConnection.addTrack(track, audioStream);
-                    });
+                    
+                    // Обрабатываем ожидающие ICE кандидаты
+                    processPendingIceCandidates();
                 }
-                
-                // Обрабатываем ожидающие ICE кандидаты
-                processPendingIceCandidates();
                 
             } catch (error) {
                 console.error('WebRTC initialization error:', error);
+                showNotification('Ошибка', 'Не удалось инициализировать звонок', 'error');
             }
         }
         
@@ -1657,9 +1680,9 @@
             }
         }
 
-        peerConnection.onsignalingstatechange = () => {
-            console.log('Signaling state changed to:', peerConnection.signalingState);
-            if (peerConnection.signalingState === 'stable') {
+        window.peerConnection.onsignalingstatechange = () => {
+            console.log('Signaling state changed to:', window.peerConnection.signalingState);
+            if (window.peerConnection.signalingState === 'stable') {
                 processPendingIceCandidates();
             }
         };
@@ -1754,18 +1777,18 @@
         async function handleCallAnswered(data) {
             const { answer } = data;
             
-            if (peerConnection && isCaller) {
+            if (window.peerConnection && isCaller) {
                 try {
                     // Проверяем текущее состояние
-                    console.log('Current signaling state:', peerConnection.signalingState);
+                    console.log('Current signaling state:', window.peerConnection.signalingState);
                     
                     // Ждем пока соединение перейдет в состояние have-local-offer
-                    if (peerConnection.signalingState !== 'have-local-offer') {
+                    if (window.peerConnection.signalingState !== 'have-local-offer') {
                         console.log('Wrong signaling state for setting remote answer');
                         return;
                     }
                     
-                    await peerConnection.setRemoteDescription(answer);
+                    await window.peerConnection.setRemoteDescription(answer);
                     console.log('Remote description set successfully');
                     showNotification('Звонок', 'Собеседник ответил на звонок', 'success');
                     stopRingtone();
@@ -1774,7 +1797,7 @@
                     console.error('Error setting remote description:', error);
                     // Пытаемся восстановить соединение
                     try {
-                        await peerConnection.setRemoteDescription(answer);
+                        await window.peerConnection.setRemoteDescription(answer);
                         console.log('Remote description set on second attempt');
                     } catch (retryError) {
                         console.error('Retry also failed:', retryError);
@@ -1792,19 +1815,19 @@
                 return;
             }
             
-            if (peerConnection) {
+            if (window.peerConnection) {
                 try {
                     // Ждем пока remote description будет установлен
-                    if (!peerConnection.remoteDescription) {
+                    if (!window.peerConnection.remoteDescription) {
                         console.log('Remote description not set, queuing ICE candidate');
                         pendingIceCandidates.push(candidate);
                         return;
                     }
                     
                     // Проверяем состояние соединения
-                    if (peerConnection.signalingState === 'stable') {
+                    if (window.peerConnection.signalingState === 'stable') {
                         console.log('Adding ICE candidate in stable state');
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        await window.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
                         console.log('ICE candidate added successfully');
                     } else {
                         console.log('Signaling state not stable, queuing ICE candidate');
@@ -1841,6 +1864,14 @@
                 showNotification('Ошибка', 'Выберите собеседника для звонка', 'error');
                 return;
             }
+
+            const connectionTimeout = setTimeout(() => {
+                if (window.peerConnection && window.peerConnection.connectionState !== 'connected') {
+                    console.log('Connection timeout - ending call');
+                    endCall();
+                    showNotification('Ошибка', 'Не удалось установить соединение', 'error');
+                }
+            }, 30000); // 30 секунд
             
             if (!websocket || websocket.readyState !== WebSocket.OPEN) {
                 showNotification('Ошибка', 'Нет соединения с сервером', 'error');
@@ -1865,12 +1896,12 @@
                 await initializeWebRTC();
                 
                 // Создаем offer
-                const offer = await peerConnection.createOffer({
+                const offer = await window.peerConnection.createOffer({
                     offerToReceiveAudio: true,
                     offerToReceiveVideo: false
                 });
                 
-                await peerConnection.setLocalDescription(offer);
+                await window.peerConnection.setLocalDescription(offer);
                 
                 isCaller = true;
                 currentCallId = Date.now().toString();
@@ -1888,6 +1919,21 @@
                 // Показываем интерфейс звонка
                 showCallInterface();
                 showNotification('Звонок', 'Вызываем собеседника...', 'info');
+
+                if (window.peerConnection) {
+                    window.peerConnection.onconnectionstatechange = () => {
+                        console.log('Connection state:', window.peerConnection.connectionState);
+                        if (window.peerConnection.connectionState === 'connected') {
+                            clearTimeout(connectionTimeout);
+                        }
+                    };
+                }
+
+                } catch (error) {
+                    clearTimeout(connectionTimeout);
+                    console.error('Ошибка начала звонка:', error);
+                    showNotification('Ошибка', 'Не удалось начать звонок', 'error');
+                }
                 
             } catch (error) {
                 console.error('Ошибка начала звонка:', error);
@@ -1930,8 +1976,8 @@
                 }
                 
                 // Создаем answer
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
+                const answer = await window.peerConnection.createAnswer();
+                await window.peerConnection.setLocalDescription(answer);
                 
                 // Отправляем answer
                 websocket.send(JSON.stringify({
@@ -1991,9 +2037,9 @@
             stopRemoteAudioAnalysis();
             
             // Закрываем соединение
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
+            if (window.peerConnection) {
+                window.peerConnection.close();
+                window.peerConnection = null;
             }
             
             // Останавливаем медиапоток
@@ -2076,7 +2122,10 @@
         
         // ===== ФУНКЦИИ ДЛЯ АНАЛИЗА АУДИО =====
         function startAudioAnalysis() {
-            if (!audioStream) return;
+            if (!audioStream) {
+                console.log('No audio stream for analysis');
+                return;
+            }
             
             try {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -2122,14 +2171,19 @@
                 }
                 
                 updateVolume();
+                
             } catch (error) {
                 console.error('Audio analysis error:', error);
             }
         }
+
         
         function setupRemoteAudioAnalysis() {
             const remoteAudio = document.getElementById('remote-audio');
-            if (!remoteAudio || !remoteAudio.srcObject) return;
+            if (!remoteAudio || !remoteAudio.srcObject) {
+                console.log('No remote audio for analysis');
+                return;
+            }
             
             try {
                 const remoteAudioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -2175,6 +2229,7 @@
                 }
                 
                 updateRemoteVolume();
+                
             } catch (error) {
                 console.error('Remote audio analysis error:', error);
             }
@@ -2982,6 +3037,7 @@
     </script>
 </body>
 </html>
+
 
 
 
