@@ -6,8 +6,6 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
-const activeCalls = new Map();
-const activeChannels = new Map();
 
 const app = express();
 const server = http.createServer(app);
@@ -20,10 +18,10 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cors());
 app.use(express.static('public'));
 
-// Хранилище WebSocket соединений
+// Хранилище WebSocket соединений и аудио потоков
 const userConnections = new Map();
+const audioStreams = new Map();
 
-// WebSocket обработка
 // WebSocket обработка
 wss.on('connection', (ws, request) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
@@ -32,7 +30,7 @@ wss.on('connection', (ws, request) => {
     console.log('User connected:', userId);
     
     if (userId) {
-        userConnections.set(userId.toString(), ws);
+        userConnections.set(userId, ws);
     }
 
     ws.on('message', (message) => {
@@ -47,7 +45,8 @@ wss.on('connection', (ws, request) => {
     ws.on('close', () => {
         console.log('User disconnected:', userId);
         if (userId) {
-            userConnections.delete(userId.toString());
+            userConnections.delete(userId);
+            audioStreams.delete(userId);
         }
     });
 
@@ -66,8 +65,8 @@ function handleWebSocketMessage(userId, data) {
         case 'call-answer':
             handleCallAnswer(userId, data);
             break;
-        case 'ice-candidate':
-            handleIceCandidate(userId, data);
+        case 'audio-data':
+            handleAudioData(userId, data);
             break;
         case 'reject-call':
             handleRejectCall(userId, data);
@@ -79,107 +78,71 @@ function handleWebSocketMessage(userId, data) {
 }
 
 function handleCallOffer(callerId, data) {
-    const { targetUserId, offer, callerName, callerAvatar, channelId } = data;
-    console.log('Call offer from', callerId, 'to', targetUserId, 'channel:', channelId);
+    const { targetUserId, callerName, callerAvatar } = data;
+    console.log('Call offer from', callerId, 'to', targetUserId);
     
-    // Создаем канал
-    activeChannels.set(channelId, {
-        callerId: callerId.toString(),
-        targetUserId: targetUserId.toString(),
-        callerOffer: offer,
-        createdAt: Date.now()
-    });
-    
-    const targetWs = userConnections.get(targetUserId.toString());
+    const targetWs = userConnections.get(targetUserId);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
             type: 'incoming-call',
             callerId: callerId,
-            offer: offer,
             callerName: callerName,
-            callerAvatar: callerAvatar,
-            channelId: channelId
+            callerAvatar: callerAvatar
         }));
         console.log('Call offer sent to', targetUserId);
     } else {
         console.log('Target user not connected:', targetUserId);
-        activeChannels.delete(channelId);
     }
 }
 
 function handleCallAnswer(calleeId, data) {
-    const { callerId, answer, channelId } = data;
-    console.log('Call answer from', calleeId, 'to', callerId, 'channel:', channelId);
+    const { callerId } = data;
+    console.log('Call answer from', calleeId, 'to', callerId);
     
-    const channel = activeChannels.get(channelId);
-    if (!channel) {
-        console.log('Channel not found:', channelId);
-        return;
-    }
-    
-    const callerWs = userConnections.get(callerId.toString());
+    const callerWs = userConnections.get(callerId);
     if (callerWs && callerWs.readyState === WebSocket.OPEN) {
         callerWs.send(JSON.stringify({
             type: 'call-answered',
-            answer: answer,
-            calleeId: calleeId,
-            channelId: channelId
+            calleeId: calleeId
         }));
     }
 }
 
-function handleIceCandidate(userId, data) {
-    const { targetUserId, candidate, channelId } = data;
+function handleAudioData(userId, data) {
+    const { targetUserId, audioData } = data;
     
-    const targetWs = userConnections.get(targetUserId.toString());
+    const targetWs = userConnections.get(targetUserId);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        // Отправляем аудио данные целевому пользователю
         targetWs.send(JSON.stringify({
-            type: 'ice-candidate',
-            candidate: candidate,
-            userId: userId,
-            channelId: channelId
+            type: 'audio-data',
+            audioData: audioData,
+            userId: userId
         }));
     }
 }
 
 function handleRejectCall(calleeId, data) {
     const { callerId } = data;
-    console.log('Call rejected by', calleeId, 'for caller', callerId);
     
-    const callerWs = userConnections.get(callerId.toString());
+    const callerWs = userConnections.get(callerId);
     if (callerWs && callerWs.readyState === WebSocket.OPEN) {
         callerWs.send(JSON.stringify({
-            type: 'call-rejected',
-            calleeId: calleeId
+            type: 'call-rejected'
         }));
     }
 }
 
 function handleEndCall(userId, data) {
-    const { targetUserId, channelId } = data;
-    console.log('End call from', userId, 'channel:', channelId);
+    const { targetUserId } = data;
     
-    // Удаляем канал
-    activeChannels.delete(channelId);
-    
-    const targetWs = userConnections.get(targetUserId.toString());
+    const targetWs = userConnections.get(targetUserId);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
-            type: 'call-ended',
-            channelId: channelId
+            type: 'call-ended'
         }));
     }
 }
-
-setInterval(() => {
-    const now = Date.now();
-    for (const [channelId, channel] of activeChannels.entries()) {
-        if (now - channel.createdAt > 300000) { // 5 минут
-            activeChannels.delete(channelId);
-            console.log('Cleaned up old channel:', channelId);
-        }
-    }
-}, 60000);
 
 // Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
@@ -247,7 +210,7 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
     }
 });
 
-// API маршруты
+// API маршруты (остаются без изменений)
 app.post('/api/register', async (req, res) => {
     const { username, password, name } = req.body;
     
@@ -334,6 +297,58 @@ app.post('/api/login', (req, res) => {
             });
         }
     );
+});
+
+app.post('/api/register', async (req, res) => {
+    const { username, password, name } = req.body;
+    
+    if (!username || !password) {
+        return res.status(400).json({ success: false, error: 'Имя пользователя и пароль обязательны' });
+    }
+    
+    if (username.length < 3) {
+        return res.status(400).json({ success: false, error: 'Имя пользователя должно содержать至少 3 символа' });
+    }
+    
+    if (password.length < 6) {
+        return res.status(400).json({ success: false, error: 'Пароль должен содержать至少 6 символов' });
+    }
+    
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        db.run(
+            'INSERT INTO users (username, password, name) VALUES (?, ?, ?)',
+            [username, hashedPassword, name || username],
+            function(err) {
+                if (err) {
+                    if (err.message.includes('UNIQUE constraint failed')) {
+                        return res.status(400).json({ success: false, error: 'Пользователь с таким именем уже существует' });
+                    }
+                    return res.status(500).json({ success: false, error: 'Ошибка при создании пользователя' });
+                }
+                
+                db.get(
+                    'SELECT id, username, name, avatar, created_at FROM users WHERE id = ?',
+                    [this.lastID],
+                    (err, user) => {
+                        if (err) {
+                            return res.status(500).json({ success: false, error: 'Ошибка при получении данных пользователя' });
+                        }
+                        
+                        res.json({ 
+                            success: true,
+                            message: 'Пользователь успешно создан',
+                            user
+                        });
+                    }
+                );
+            }
+        );
+    } catch (error) {
+        console.error('Ошибка регистрации:', error);
+        res.status(500).json({ success: false, error: 'Ошибка сервера' });
+    }
 });
 
 app.post('/api/update-profile', (req, res) => {
@@ -519,6 +534,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
