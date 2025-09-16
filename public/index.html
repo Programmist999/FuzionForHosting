@@ -1519,7 +1519,7 @@
         let searchTimeout = null;
         let messageCheckInterval = null;
         let websocket = null;
-        let peerConnection = null;
+        let window.peerConnection = null;
         let currentCallId = null;
         let isCaller = false;
 
@@ -1546,10 +1546,10 @@
 
         async function initializeWebRTC() {
             try {
-                peerConnection = new RTCPeerConnection(configuration);
+                window.peerConnection = new RTCPeerConnection(configuration);
                 
                 // Обработка ICE кандидатов
-                peerConnection.onicecandidate = (event) => {
+                window.peerConnection.onicecandidate = (event) => {
                     if (event.candidate && websocket) {
                         websocket.send(JSON.stringify({
                             type: 'ice-candidate',
@@ -1561,7 +1561,7 @@
                 };
                 
                 // Обработка входящих потоков
-                peerConnection.ontrack = (event) => {
+                window.peerConnection.ontrack = (event) => {
                     console.log('Received remote stream');
                     const remoteAudio = document.getElementById('remote-audio');
                     if (remoteAudio && event.streams[0]) {
@@ -1572,7 +1572,7 @@
                 // Добавляем локальный поток
                 if (audioStream) {
                     audioStream.getTracks().forEach(track => {
-                        peerConnection.addTrack(track, audioStream);
+                        window.peerConnection.addTrack(track, audioStream);
                     });
                 }
                 
@@ -1668,9 +1668,9 @@
         async function handleCallAnswered(data) {
             const { answer } = data;
             
-            if (peerConnection && isCaller) {
+            if (window.peerConnection && isCaller) {
                 try {
-                    await peerConnection.setRemoteDescription(answer);
+                    await window.peerConnection.setRemoteDescription(answer);
                     showNotification('Звонок', 'Собеседник ответил на звонок', 'success');
                     stopRingtone();
                 } catch (error) {
@@ -1682,9 +1682,9 @@
         async function handleIceCandidate(data) {
             const { candidate } = data;
             
-            if (peerConnection && candidate) {
+            if (window.peerConnection && candidate) {
                 try {
-                    await peerConnection.addIceCandidate(candidate);
+                    await window.peerConnection.addIceCandidate(candidate);
                     console.log('Added ICE candidate');
                 } catch (error) {
                     console.error('Error adding ICE candidate:', error);
@@ -1760,7 +1760,7 @@
         }
         
         // Обновите обработку удалённого потока
-        peerConnection.ontrack = (event) => {
+        window.peerConnection.ontrack = (event) => {
             console.log('Received remote stream');
             const remoteAudio = document.getElementById('remote-audio');
             if (remoteAudio && event.streams[0]) {
@@ -1871,12 +1871,12 @@
                 await initializeWebRTC();
                 
                 // Создаем offer
-                const offer = await peerConnection.createOffer({
+                const offer = await window.peerConnection.createOffer({
                     offerToReceiveAudio: true,
                     offerToReceiveVideo: false
                 });
                 
-                await peerConnection.setLocalDescription(offer);
+                await window.peerConnection.setLocalDescription(offer);
                 
                 isCaller = true;
                 currentCallId = Date.now().toString();
@@ -1925,11 +1925,11 @@
                 await initializeWebRTC();
                 
                 // Устанавливаем удаленное описание
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
+                await window.peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
                 
                 // Создаем answer
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
+                const answer = await window.peerConnection.createAnswer();
+                await window.peerConnection.setLocalDescription(answer);
                 
                 // Отправляем answer
                 websocket.send(JSON.stringify({
@@ -1975,9 +1975,9 @@
             }
             
             // Закрываем соединение
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
+            if (window.peerConnection) {
+                window.peerConnection.close();
+                window.peerConnection = null;
             }
             
             // Останавливаем медиапоток
@@ -2351,9 +2351,9 @@
             window.incomingCallerId = null;
             
             // Закрываем соединение
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
+            if (window.peerConnection) {
+                window.peerConnection.close();
+                window.peerConnection = null;
             }
             
             // Останавливаем медиапоток
@@ -2604,14 +2604,14 @@
         }
         
                 function showSearchLoading() {
-            const resultsContainer = document.getElementById('search-results');
-            resultsContainer.innerHTML = `
-                <div class="loading-state">
-                    <div class="loader"></div>
-                    <p>Поиск пользователей...</p>
-                </div>
-            `;
-        }
+                    const resultsContainer = document.getElementById('search-results');
+                    resultsContainer.innerHTML = `
+                        <div class="loading-state">
+                            <div class="loader"></div>
+                            <p>Поиск пользователей...</p>
+                        </div>
+                    `;
+                }
         
         function showNoResults() {
             const resultsContainer = document.getElementById('search-results');
@@ -3079,9 +3079,19 @@
                 document.getElementById('user-status').textContent = 'Слушает';
             }
         }
+
+        function checkVariables() {
+            console.log('Variable check:');
+            console.log('peerConnection:', typeof peerConnection, peerConnection);
+            console.log('currentUser:', currentUser);
+            console.log('websocket:', websocket ? 'connected' : 'disconnected');
+        }
+
+        setTimeout(checkVariables, 1000);
     </script>
 </body>
 </html>
+
 
 
 
