@@ -1548,6 +1548,30 @@
         });
         
         // ===== WEBRTC ИНИЦИАЛИЗАЦИЯ =====
+
+        async function setRemoteDescriptionWithRetry(sessionDescription) {
+            const maxRetries = 3;
+            let retryCount = 0;
+            
+            while (retryCount < maxRetries) {
+                try {
+                    await peerConnection.setRemoteDescription(sessionDescription);
+                    console.log('Remote description set successfully on attempt', retryCount + 1);
+                    return true;
+                } catch (error) {
+                    console.error(`Attempt ${retryCount + 1} failed:`, error);
+                    retryCount++;
+                    
+                    if (retryCount < maxRetries) {
+                        // Ждем перед повторной попыткой
+                        await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+                    }
+                }
+            }
+            
+            throw new Error('Failed to set remote description after retries');
+        }
+        
         async function initializeWebRTC() {
             try {
                 // Закрываем предыдущее соединение
@@ -1592,6 +1616,14 @@
                         showNotification('Звонок', 'Соединение прервано', 'error');
                     }
                 };
+
+                window.peerConnection.onsignalingstatechange = () => {
+                    console.log('Signaling state changed to:', window.peerConnection.signalingState);
+                };
+                
+                window.peerConnection.onnegotiationneeded = async () => {
+                    console.log('Negotiation needed');
+                };
                 
                 // Добавляем локальный поток
                 if (audioStream) {
@@ -1610,11 +1642,13 @@
         
         // Обработка ожидающих ICE кандидатов
         async function processPendingIceCandidates() {
-            if (pendingIceCandidates.length > 0 && peerConnection.remoteDescription) {
+            if (pendingIceCandidates.length > 0 && window.peerConnection.remoteDescription) {
                 console.log('Processing', pendingIceCandidates.length, 'pending ICE candidates');
+                
                 for (const candidate of pendingIceCandidates) {
                     try {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        await window.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        console.log('Pending ICE candidate added');
                     } catch (error) {
                         console.error('Error adding pending ICE candidate:', error);
                     }
@@ -1622,6 +1656,13 @@
                 pendingIceCandidates = [];
             }
         }
+
+        peerConnection.onsignalingstatechange = () => {
+            console.log('Signaling state changed to:', peerConnection.signalingState);
+            if (peerConnection.signalingState === 'stable') {
+                processPendingIceCandidates();
+            }
+        };
         
         // ===== WEB SOCKET СОЕДИНЕНИЕ =====
         function connectWebSocket() {
@@ -1715,12 +1756,29 @@
             
             if (peerConnection && isCaller) {
                 try {
+                    // Проверяем текущее состояние
+                    console.log('Current signaling state:', peerConnection.signalingState);
+                    
+                    // Ждем пока соединение перейдет в состояние have-local-offer
+                    if (peerConnection.signalingState !== 'have-local-offer') {
+                        console.log('Wrong signaling state for setting remote answer');
+                        return;
+                    }
+                    
                     await peerConnection.setRemoteDescription(answer);
                     console.log('Remote description set successfully');
                     showNotification('Звонок', 'Собеседник ответил на звонок', 'success');
                     stopRingtone();
+                    
                 } catch (error) {
                     console.error('Error setting remote description:', error);
+                    // Пытаемся восстановить соединение
+                    try {
+                        await peerConnection.setRemoteDescription(answer);
+                        console.log('Remote description set on second attempt');
+                    } catch (retryError) {
+                        console.error('Retry also failed:', retryError);
+                    }
                 }
             }
         }
@@ -1736,20 +1794,28 @@
             
             if (peerConnection) {
                 try {
-                    // Если remote description еще не установлен, сохраняем кандидаты в очередь
+                    // Ждем пока remote description будет установлен
                     if (!peerConnection.remoteDescription) {
                         console.log('Remote description not set, queuing ICE candidate');
                         pendingIceCandidates.push(candidate);
                         return;
                     }
                     
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    console.log('ICE candidate added successfully');
+                    // Проверяем состояние соединения
+                    if (peerConnection.signalingState === 'stable') {
+                        console.log('Adding ICE candidate in stable state');
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        console.log('ICE candidate added successfully');
+                    } else {
+                        console.log('Signaling state not stable, queuing ICE candidate');
+                        pendingIceCandidates.push(candidate);
+                    }
+                    
                 } catch (error) {
                     console.error('Error adding ICE candidate:', error);
                 }
             }
-        }
+}
         
         function handleCallRejected() {
             endCall();
@@ -1828,7 +1894,7 @@
                 showNotification('Ошибка', 'Не удалось начать звонок: ' + error.message, 'error');
             }
         }
-        
+
         async function acceptCall() {
             if (!window.incomingOffer) {
                 showNotification('Ошибка', 'Нет входящего звонка', 'error');
@@ -1852,8 +1918,16 @@
                 // Инициализируем WebRTC
                 await initializeWebRTC();
                 
-                // Устанавливаем удаленное описание
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
+                isCaller = false;
+                
+                // Устанавливаем удаленное описание с обработкой ошибок
+                try {
+                    await setRemoteDescriptionWithRetry(new RTCSessionDescription(window.incomingOffer));
+                } catch (error) {
+                    console.error('Failed to set remote offer:', error);
+                    showNotification('Ошибка', 'Не удалось принять звонок', 'error');
+                    return;
+                }
                 
                 // Создаем answer
                 const answer = await peerConnection.createAnswer();
@@ -1950,6 +2024,37 @@
             
             showNotification('Звонок', 'Звонок завершен', 'info');
         }
+
+        function checkAudioStreams() {
+            console.log('=== AUDIO STREAMS CHECK ===');
+            
+            // Проверяем локальный поток
+            if (audioStream) {
+                const audioTracks = audioStream.getAudioTracks();
+                console.log('Local audio tracks:', audioTracks.length);
+                audioTracks.forEach((track, index) => {
+                    console.log(`Track ${index}:`, track.enabled ? 'enabled' : 'disabled', 
+                                'readyState:', track.readyState);
+                });
+            } else {
+                console.log('No local audio stream');
+            }
+            
+            // Проверяем удаленный поток
+            const remoteAudio = document.getElementById('remote-audio');
+            if (remoteAudio && remoteAudio.srcObject) {
+                const remoteTracks = remoteAudio.srcObject.getTracks();
+                console.log('Remote audio tracks:', remoteTracks.length);
+                remoteTracks.forEach((track, index) => {
+                    console.log(`Remote track ${index}:`, track.readyState);
+                });
+            } else {
+                console.log('No remote audio stream');
+            }
+        }
+        
+        // Вызывайте эту функцию после установления соединения
+        setTimeout(checkAudioStreams, 2000);
         
         function showCallInterface() {
             const callContainer = document.getElementById('call-container');
@@ -2877,6 +2982,7 @@
     </script>
 </body>
 </html>
+
 
 
 
