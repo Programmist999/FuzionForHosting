@@ -397,10 +397,10 @@ app.post('/api/update-profile', (req, res) => {
                 return res.status(500).json({ success: false, error: 'Ошибка при обновлении профиля' });
             }
             
-            db.get(
+           db.get(
                 'SELECT id, username, name, avatar, created_at FROM users WHERE id = ?',
                 [userId],
-                (err, user) {
+                (err, user) => {  // ← Добавлено =>
                     if (err) {
                         return res.status(500).json({ success: false, error: 'Ошибка при получении данных пользователя' });
                     }
@@ -564,3 +564,4 @@ process.on('SIGINT', () => {
         });
     });
 });
+
