@@ -20,7 +20,7 @@ app.use(express.static('public'));
 
 // Хранилище WebSocket соединений
 const userConnections = new Map();
-const activeCalls = new Map(); // Добавляем для отслеживания активных звонков
+const activeCalls = new Map();
 
 // WebSocket обработка
 wss.on('connection', (ws, request) => {
@@ -64,7 +64,6 @@ wss.on('connection', (ws, request) => {
 
 function handleWebSocketMessage(userId, data) {
     console.log('Received message:', data.type, 'from:', userId);
-    console.log('Received message type:', data.type, 'from user:', userId);
     
     switch (data.type) {
         case 'call-offer':
@@ -74,7 +73,7 @@ function handleWebSocketMessage(userId, data) {
             handleCallAnswer(userId, data);
             break;
         case 'ice-candidate':
-            (userId, data);
+            handleIceCandidate(userId, data);
             break;
         case 'reject-call':
             handleRejectCall(userId, data);
@@ -149,14 +148,6 @@ function handleCallAnswer(calleeId, data) {
 function handleIceCandidate(userId, data) {
     const { targetUserId, candidate, callId } = data;
     console.log('ICE candidate from', userId, 'to', targetUserId, 'callId:', callId);
-
-    // В handleIceCandidate добавьте:
-    console.log('ICE candidate data:', {
-        from: userId,
-        to: targetUserId,
-        callId: callId,
-        candidate: candidate ? 'exists' : 'null'
-    });
     
     // Проверяем, что звонок существует
     const callInfo = activeCalls.get(callId);
@@ -171,7 +162,6 @@ function handleIceCandidate(userId, data) {
         targetWs.send(JSON.stringify({
             type: 'ice-candidate',
             candidate: candidate,
-            userId: userId,
             callId: callId
         }));
     } else {
@@ -234,14 +224,14 @@ function notifyCallEnded(callId, disconnectedUserId) {
 setInterval(() => {
     const now = Date.now();
     for (const [callId, callInfo] of activeCalls.entries()) {
-        if (now - callInfo.timestamp > 300000) { // 5 минут
+        if (now - callInfo.timestamp > 300000) {
             activeCalls.delete(callId);
             console.log('Cleaned up old call:', callId);
         }
     }
 }, 60000);
 
-// Инициализация базы данных (остается без изменений)
+// Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
     if (err) {
         console.error('Ошибка подключения к базе данных:', err.message);
@@ -258,7 +248,7 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`, (err) => {
             if (err) {
-                console.error('Ошибка создания таблицы users:', err);
+                console.error('Ошибка создания таблиции users:', err);
             } else {
                 console.log('Таблица users готова.');
             }
@@ -296,6 +286,9 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                     ["testuser", testPassword, "Test User", "https://via.placeholder.com/150/7a64ff/ffffff?text=T"],
                     function(err) {
                         if (err) {
+                            console.error('Ошибка создания тестового пользователя:', err);
+                        } else {
+                            console.log('Тестовый пользователь создан. Логин: testuser, Пароль: test123');
                         }
                     }
                 );
@@ -304,7 +297,7 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
     }
 });
 
-// API маршруты (остаются без изменений)
+// API маршруты
 app.post('/api/register', async (req, res) => {
     const { username, password, name } = req.body;
     
@@ -409,10 +402,10 @@ app.post('/api/update-profile', (req, res) => {
                 return res.status(500).json({ success: false, error: 'Ошибка при обновлении профиля' });
             }
             
-           db.get(
+            db.get(
                 'SELECT id, username, name, avatar, created_at FROM users WHERE id = ?',
                 [userId],
-                (err, user) => {  // ← Добавлено =>
+                (err, user) => {
                     if (err) {
                         return res.status(500).json({ success: false, error: 'Ошибка при получении данных пользователя' });
                     }
@@ -559,7 +552,7 @@ app.use((err, req, res, next) => {
 server.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
     console.log(`WebSocket сервер запущен`);
-    console.log(`Откройте в браузера: http://localhost:${PORT}`);
+    console.log(`Откройте в браузере: http://localhost:${PORT}`);
 });
 
 // Graceful shutdown
@@ -576,5 +569,3 @@ process.on('SIGINT', () => {
         });
     });
 });
-
-
