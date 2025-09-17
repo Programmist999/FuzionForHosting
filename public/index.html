@@ -1532,14 +1532,27 @@
         const WS_URL = window.location.origin.replace('http', 'ws');
         
         // WebRTC конфигурация
+        // Обновите конфигурацию WebRTC
         const configuration = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
-            ]
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { 
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                { 
+                    urls: 'turn:openrelay.metered.ca:443',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                }
+            ],
+            iceTransportPolicy: 'all' // Пробуем и relay тоже
         };
-        
+                
         // ===== ИНИЦИАЛИЗАЦИЯ МЕССЕНДЖЕРА =====
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded, initializing...');
@@ -1773,37 +1786,77 @@
         }
         
         async function handleIceCandidate(data) {
-            const { candidate, callId } = data;
+            const { candidate, userId, callId } = data;
+            
+            console.log('Received ICE candidate from user:', userId, 'for call:', callId);
             
             // Проверяем, что это кандидат для текущего звонка
             if (callId !== currentCallId) {
-                console.log('ICE candidate for different call, ignoring');
+                console.log('ICE candidate for different call, ignoring. Expected:', currentCallId, 'Got:', callId);
                 return;
             }
             
-            if (peerConnection) {
+            if (peerConnection && candidate) {
                 try {
-                    // Если remote description еще не установлен, сохраняем кандидаты в очередь
-                    if (!peerConnection.remoteDescription) {
-                        console.log('Remote description not set, queuing ICE candidate');
-                        pendingIceCandidates.push(candidate);
-                        return;
-                    }
-                    
-                    // Проверяем состояние signaling
-                    if (peerConnection.signalingState === 'stable') {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                        console.log('ICE candidate added successfully');
-                    } else {
-                        console.log('Signaling state not stable, queuing ICE candidate');
-                        pendingIceCandidates.push(candidate);
-                    }
+                    console.log('Adding ICE candidate from:', userId);
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log('ICE candidate added successfully from user:', userId);
                     
                 } catch (error) {
                     console.error('Error adding ICE candidate:', error);
+                    // Сохраняем для повторной попытки
+                    pendingIceCandidates.push(candidate);
+                }
+            } else {
+                console.log('No peer connection or candidate, queuing ICE candidate');
+                pendingIceCandidates.push(candidate);
+            }
+        }
+
+        function checkIceConnection() {
+            if (peerConnection) {
+                console.log('ICE connection state:', peerConnection.iceConnectionState);
+                console.log('ICE gathering state:', peerConnection.iceGatheringState);
+                
+                // Если ICE застрял в состоянии checking, пытаемся перезапустить
+                if (peerConnection.iceConnectionState === 'checking') {
+                    console.log('ICE is in checking state for too long');
                 }
             }
         }
+        
+        // Проверяем каждые 3 секунды
+        setInterval(checkIceConnection, 3000);
+
+        async function restartIce() {
+            if (!peerConnection) return;
+            
+            try {
+                console.log('Restarting ICE...');
+                const offer = await peerConnection.createOffer({ iceRestart: true });
+                await peerConnection.setLocalDescription(offer);
+                
+                if (isCaller && websocket) {
+                    websocket.send(JSON.stringify({
+                        type: 'call-offer',
+                        targetUserId: currentContact.id,
+                        offer: offer,
+                        callId: currentCallId,
+                        iceRestart: true
+                    }));
+                }
+                
+            } catch (error) {
+                console.error('Error restarting ICE:', error);
+            }
+        }
+        
+        // Автоматический restart ICE если соединение не устанавливается
+        setTimeout(() => {
+            if (peerConnection && peerConnection.iceConnectionState === 'checking') {
+                restartIce();
+            }
+        }, 10000);
         
         function handleCallRejected() {
             endCall();
@@ -2054,17 +2107,26 @@
             callContainer.classList.add('active');
             isCallActive = true;
             
-            // Обновляем информацию о собеседнике
+            // Обновляем информацию
             document.getElementById('contact-call-name').textContent = currentContact.name || currentContact.username;
             document.getElementById('contact-call-avatar').src = currentContact.avatar || './free-icon-user-avatar-3607444.png';
-            
-            // Обновляем свою информацию
             document.getElementById('user-call-name').textContent = currentUser.name || currentUser.username;
-            document.getElementById('user-call-avatar').src = currentUser.avatar || './free-icon-user-avatar-3607444.png';
             
-            // Сбрасываем статусы
-            document.getElementById('user-status').textContent = 'Микрофон включен';
-            document.getElementById('contact-status').textContent = 'Соединение устанавливается';
+            // Показываем статус соединения
+            document.getElementById('user-status').textContent = 'Подключается...';
+            document.getElementById('contact-status').textContent = 'Установка соединения';
+            
+            // Запускаем анимацию подключения
+            const statusElement = document.getElementById('contact-status');
+            let dots = 0;
+            const connectingInterval = setInterval(() => {
+                dots = (dots + 1) % 4;
+                statusElement.textContent = 'Установка соединения' + '.'.repeat(dots);
+                
+                if (!isCallActive) {
+                    clearInterval(connectingInterval);
+                }
+            }, 500);
         }
         
         // ===== ФУНКЦИИ ДЛЯ АНАЛИЗА АУДИО (исправленные) =====
@@ -3098,6 +3160,7 @@
     </script>
 </body>
 </html>
+
 
 
 
