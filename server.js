@@ -64,6 +64,7 @@ wss.on('connection', (ws, request) => {
 
 function handleWebSocketMessage(userId, data) {
     console.log('Received message:', data.type, 'from:', userId);
+    console.log('Received message type:', data.type, 'from user:', userId);
     
     switch (data.type) {
         case 'call-offer':
@@ -73,7 +74,7 @@ function handleWebSocketMessage(userId, data) {
             handleCallAnswer(userId, data);
             break;
         case 'ice-candidate':
-            handleIceCandidate(userId, data);
+            (userId, data);
             break;
         case 'reject-call':
             handleRejectCall(userId, data);
@@ -148,6 +149,14 @@ function handleCallAnswer(calleeId, data) {
 function handleIceCandidate(userId, data) {
     const { targetUserId, candidate, callId } = data;
     console.log('ICE candidate from', userId, 'to', targetUserId, 'callId:', callId);
+
+    // В handleIceCandidate добавьте:
+    console.log('ICE candidate data:', {
+        from: userId,
+        to: targetUserId,
+        callId: callId,
+        candidate: candidate ? 'exists' : 'null'
+    });
     
     // Проверяем, что звонок существует
     const callInfo = activeCalls.get(callId);
@@ -158,12 +167,15 @@ function handleIceCandidate(userId, data) {
     
     const targetWs = userConnections.get(targetUserId.toString());
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        console.log('Forwarding ICE candidate to target user');
         targetWs.send(JSON.stringify({
             type: 'ice-candidate',
             candidate: candidate,
             userId: userId,
             callId: callId
         }));
+    } else {
+        console.log('Target user not connected for ICE candidate:', targetUserId);
     }
 }
 
@@ -564,4 +576,5 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
