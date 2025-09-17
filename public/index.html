@@ -1561,14 +1561,30 @@
                 
                 // Обработка ICE кандидатов
                 peerConnection.onicecandidate = (event) => {
-                    if (event.candidate && websocket && currentCallId) {
-                        console.log('Sending ICE candidate');
-                        websocket.send(JSON.stringify({
-                            type: 'ice-candidate',
-                            targetUserId: isCaller ? currentContact.id : window.incomingCallerId,
-                            candidate: event.candidate,
-                            callId: currentCallId
-                        }));
+                    if (event.candidate) {
+                        console.log('New ICE candidate generated');
+                        
+                        // Проверяем все условия перед отправкой
+                        if (websocket && 
+                            websocket.readyState === WebSocket.OPEN && 
+                            currentCallId && 
+                            (isCaller ? currentContact.id : window.incomingCallerId)) {
+                            
+                            const targetUserId = isCaller ? currentContact.id : window.incomingCallerId;
+                            
+                            console.log('Sending ICE candidate to:', targetUserId);
+                            websocket.send(JSON.stringify({
+                                type: 'ice-candidate',
+                                targetUserId: targetUserId,
+                                candidate: event.candidate,
+                                callId: currentCallId
+                            }));
+                        } else {
+                            console.log('Cannot send ICE candidate - missing requirements:');
+                            console.log('WebSocket ready:', websocket ? websocket.readyState : 'no websocket');
+                            console.log('Current call ID:', currentCallId);
+                            console.log('Target user ID:', isCaller ? currentContact?.id : window.incomingCallerId);
+                        }
                     }
                 };
 
@@ -1889,6 +1905,23 @@
                 showNotification('Ошибка', 'Не удалось начать звонок: ' + error.message, 'error');
             }
         }
+
+        function checkIceCandidates() {
+            console.log('=== ICE Candidates Check ===');
+            console.log('WebSocket state:', websocket ? websocket.readyState : 'not connected');
+            console.log('Current call ID:', currentCallId);
+            console.log('isCaller:', isCaller);
+            console.log('Current contact:', currentContact ? currentContact.id : 'none');
+            console.log('Incoming caller:', window.incomingCallerId);
+            
+            if (peerConnection) {
+                console.log('Peer connection state:', peerConnection.connectionState);
+                console.log('ICE gathering state:', peerConnection.iceGatheringState);
+            }
+        }
+        
+        // Вызывайте для диагностики
+        setTimeout(checkIceCandidates, 2000);
         
         async function acceptCall() {
             if (!window.incomingOffer) {
@@ -3065,6 +3098,7 @@
     </script>
 </body>
 </html>
+
 
 
 
