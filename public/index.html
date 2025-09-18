@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Стили остаются такими же как в оригинале */
         * {
             margin: 0;
             padding: 0;
@@ -88,30 +87,55 @@
             display: flex;
             flex: 1;
             overflow: hidden;
+            padding: 10px;
+            gap: 10px;
         }
         
         .contacts-sidebar {
-            width: 340px;
-            background: rgba(18, 21, 56, 0.7);
+            width: 80px;
+            background: rgba(18, 21, 56, 0.95);
             border-right: 1px solid rgba(101, 78, 163, 0.3);
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(122, 100, 255, 0.2);
+            border-radius: 20px;
+            height: calc(100% - 20px);
+            animation: levitate 6s ease-in-out infinite;
+        }
+        
+        .contacts-sidebar:hover {
+            width: 340px;
+            box-shadow: 0 0 50px rgba(122, 100, 255, 0.3);
+            transform: translateY(-5px);
+            animation: levitate 3s ease-in-out infinite;
         }
         
         .sidebar-header {
-            padding: 20px;
+            padding: 20px 15px;
             background: rgba(22, 25, 65, 0.9);
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid rgba(101, 78, 163, 0.3);
+            min-width: 280px;
         }
         
         .sidebar-header h2 {
             font-size: 20px;
             color: #fff;
             font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+        }
+        
+        .contacts-sidebar:hover .sidebar-header h2 {
+            opacity: 1;
         }
         
         .new-chat-btn {
@@ -135,9 +159,10 @@
         }
         
         .search-container {
-            padding: 20px;
+            padding: 15px;
             background: rgba(18, 21, 56, 0.5);
             border-bottom: 1px solid rgba(101, 78, 163, 0.3);
+            min-width: 280px;
         }
         
         .search-box {
@@ -150,6 +175,8 @@
             transition: all 0.3s ease;
             color: #fff;
             border: 1px solid rgba(101, 78, 163, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
         
         .search-box:focus {
@@ -162,6 +189,10 @@
             color: #5a5a8c;
         }
         
+        .contacts-sidebar:hover .search-box {
+            opacity: 1;
+        }
+        
         .contacts-list {
             flex: 1;
             overflow-y: auto;
@@ -171,10 +202,19 @@
         .contact-item {
             display: flex;
             align-items: center;
-            padding: 18px 20px;
+            padding: 15px;
             cursor: pointer;
             transition: all 0.3s ease;
             border-bottom: 1px solid rgba(101, 78, 163, 0.1);
+            min-width: 280px;
+            opacity: 0;
+            transform: translateX(-20px);
+            transition: all 0.4s ease;
+        }
+        
+        .contacts-sidebar:hover .contact-item {
+            opacity: 1;
+            transform: translateX(0);
         }
         
         .contact-item:hover {
@@ -197,17 +237,32 @@
         }
         
         .contact-avatar {
-            width: 52px;
-            height: 52px;
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
             object-fit: cover;
-            margin-right: 15px;
+            margin-right: 0;
             border: 2px solid #7a64ff;
             box-shadow: 0 5px 15px rgba(122, 100, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .contacts-sidebar:hover .contact-avatar {
+            margin-right: 15px;
+            width: 52px;
+            height: 52px;
         }
         
         .contact-info {
             flex: 1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        
+        .contacts-sidebar:hover .contact-info {
+            opacity: 1;
+            pointer-events: auto;
         }
         
         .contact-name {
@@ -225,12 +280,48 @@
             text-overflow: ellipsis;
         }
         
+        .sidebar-collapsed-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-90deg);
+            color: #7a64ff;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            opacity: 0.7;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+        
+        .sidebar-collapsed-indicator i {
+            font-size: 24px;
+            animation: pulse 2s infinite;
+        }
+        
+        .contacts-sidebar:hover .sidebar-collapsed-indicator {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .contact-item:nth-child(1) { transition-delay: 0.05s; }
+        .contact-item:nth-child(2) { transition-delay: 0.1s; }
+        .contact-item:nth-child(3) { transition-delay: 0.15s; }
+        .contact-item:nth-child(4) { transition-delay: 0.2s; }
+        .contact-item:nth-child(5) { transition-delay: 0.25s; }
+        .contact-item:nth-child(6) { transition-delay: 0.3s; }
+        
         .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
             background: rgba(13, 15, 35, 0.8);
             position: relative;
+            border-radius: 20px;
+            overflow: hidden;
         }
         
         .chat-header {
@@ -362,7 +453,7 @@
             box-shadow: 0 0 20px rgba(122, 100, 255, 0.3);
         }
         
-                .message-input::placeholder {
+        .message-input::placeholder {
             color: #5a5a8c;
         }
         
@@ -618,6 +709,7 @@
         
         .profile-avatar-container:hover .avatar-change-text {
             opacity: 1;
+            pointer-events: none;
         }
         
         .avatar-file-input {
@@ -1130,9 +1222,37 @@
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
         
+        .typing-indicator {
+            display: flex;
+            padding: 16px 22px;
+            background: rgba(38, 41, 85, 0.9);
+            border-radius: 20px;
+            align-self: flex-start;
+            margin-bottom: 18px;
+            animation: pulse 1.5s infinite;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .typing-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #7a64ff;
+            border-radius: 50%;
+            margin: 0 4px;
+        }
+        
         @keyframes pulse-ring {
             0% { transform: scale(0.8); opacity: 0.8; }
             100% { transform: scale(1.2); opacity: 0; }
+        }
+        
+        @keyframes levitate {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-8px);
+            }
         }
         
         @keyframes fadeIn {
@@ -1156,25 +1276,6 @@
             100% { transform: rotate(360deg); }
         }
         
-        .typing-indicator {
-            display: flex;
-            padding: 16px 22px;
-            background: rgba(38, 41, 85, 0.9);
-            border-radius: 20px;
-            align-self: flex-start;
-            margin-bottom: 18px;
-            animation: pulse 1.5s infinite;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-        }
-        
-        .typing-dot {
-            width: 10px;
-            height: 10px;
-            background-color: #7a64ff;
-            border-radius: 50%;
-            margin: 0 4px;
-        }
-        
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -1195,23 +1296,55 @@
         
         @media (max-width: 768px) {
             .contacts-sidebar {
-                width: 80px;
+                width: 60px;
+                margin: 5px;
+                height: calc(100% - 10px);
+                border-radius: 15px;
+                position: fixed;
+                left: 5px;
+                z-index: 1000;
             }
             
-            .contact-info {
-                display: none;
+            .contacts-sidebar:hover {
+                width: 280px;
             }
             
-            .sidebar-header h2 {
-                display: none;
+            .contacts-sidebar.mobile-expanded {
+                width: 280px;
             }
             
-            .search-container {
-                display: none;
+            .contacts-sidebar.mobile-expanded .sidebar-collapsed-indicator {
+                opacity: 0;
             }
             
-            .logo span {
-                display: none;
+            .contacts-sidebar.mobile-expanded .contact-info {
+                opacity: 1;
+            }
+            
+            .contacts-sidebar.mobile-expanded .search-box {
+                opacity: 1;
+            }
+            
+            .contacts-sidebar.mobile-expanded .sidebar-header h2 {
+                opacity: 1;
+            }
+            
+            .sidebar-collapsed-indicator {
+                font-size: 14px;
+            }
+            
+            .sidebar-collapsed-indicator i {
+                font-size: 20px;
+            }
+            
+            .main-content {
+                padding: 5px;
+                gap: 5px;
+            }
+            
+            .chat-area {
+                border-radius: 15px;
+                margin-left: 70px;
             }
             
             .call-users {
@@ -1249,7 +1382,7 @@
     </style>
 </head>
 <body>
-     <div class="messenger-container">
+    <div class="messenger-container">
         <!-- Верхняя панель -->
         <div class="top-bar">
             <div class="logo">
@@ -1275,6 +1408,12 @@
                 
                 <div class="search-container">
                     <input type="text" class="search-box" placeholder="Поиск..." id="contact-search">
+                </div>
+                
+                <!-- Индикатор при свёрнутом состоянии -->
+                <div class="sidebar-collapsed-indicator">
+                    <i class="fas fa-comments"></i>
+                    <span>Чаты</span>
                 </div>
                 
                 <div class="contacts-list" id="contacts-list">
@@ -1388,7 +1527,7 @@
                 <div class="auth-form">
                     <div class="form-group">
                         <label for="register-username">Имя пользователя</label>
-                        <input type="text" id="register-username" placeholder="Придумайте имя пользователя">
+                        <input type="text" id="register-username" placeholder="Придумайте имя пользователя"> 
                     </div>
                     
                     <div class="form-group">
@@ -1455,7 +1594,7 @@
             <button class="notification-btn" id="close-notification">Понятно</button>
         </div>
     </div>
-
+    
     <!-- Модальное окно поиска пользователей -->
     <div class="modal-overlay" id="search-modal">
         <div class="modal-box">
@@ -1481,7 +1620,7 @@
             </div>
         </div>
     </div>
-
+    
     <!-- Модальное окно входящего звонка -->
     <div class="modal-overlay" id="incoming-call-modal">
         <div class="modal-box incoming-call-box">
@@ -2142,33 +2281,6 @@
             showNotification('Звонок', 'Звонок завершен', 'info');
         }
         
-        // function showCallInterface() {
-        //     const callContainer = document.getElementById('call-container');
-        //     callContainer.classList.add('active');
-        //     isCallActive = true;
-            
-        //     // Обновляем информацию
-        //     document.getElementById('contact-call-name').textContent = currentContact.name || currentContact.username;
-        //     document.getElementById('contact-call-avatar').src = currentContact.avatar || './free-icon-user-avatar-3607444.png';
-        //     document.getElementById('user-call-name').textContent = currentUser.name || currentUser.username;
-            
-        //     // Показываем статус соединения
-        //     document.getElementById('user-status').textContent = 'Подключается...';
-        //     document.getElementById('contact-status').textContent = 'Установка соединения';
-            
-        //     // Запускаем анимацию подключения
-        //     const statusElement = document.getElementById('contact-status');
-        //     let dots = 0;
-        //     const connectingInterval = setInterval(() => {
-        //         dots = (dots + 1) % 4;
-        //         statusElement.textContent = 'Установка соединения' + '.'.repeat(dots);
-                
-        //         if (!isCallActive) {
-        //             clearInterval(connectingInterval);
-        //         }
-        //     }, 500);
-        // }
-
         function checkConnectionStatus() {
             if (!isCallActive) return;
             
@@ -2210,64 +2322,6 @@
             // Запускаем проверку состояния соединения
             checkConnectionStatus();
         }
-                
-        // ===== ФУНКЦИИ ДЛЯ АНАЛИЗА АУДИО (исправленные) =====
-        // function startAudioAnalysis() {
-        //     if (!audioStream) {
-        //         console.log('No audio stream for analysis');
-        //         return;
-        //     }
-            
-        //     try {
-        //         // Создаем новый аудиоконтекст для анализа
-        //         const analysisContext = new (window.AudioContext || window.webkitAudioContext)();
-        //         const analysisAnalyser = analysisContext.createAnalyser();
-        //         const analysisSource = analysisContext.createMediaStreamSource(audioStream);
-        //         analysisSource.connect(analysisAnalyser);
-                
-        //         analysisAnalyser.fftSize = 256;
-        //         const bufferLength = analysisAnalyser.frequencyBinCount;
-        //         const dataArray = new Uint8Array(bufferLength);
-                
-        //         function updateVolume() {
-        //             if (!analysisAnalyser) return;
-                    
-        //             analysisAnalyser.getByteFrequencyData(dataArray);
-        //             let sum = 0;
-        //             for (let i = 0; i < bufferLength; i++) {
-        //                 sum += dataArray[i];
-        //             }
-        //             let average = sum / bufferLength;
-                    
-        //             // Обновляем индикатор громкости
-        //             const volumeLevel = document.getElementById('user-volume');
-        //             if (volumeLevel) {
-        //                 volumeLevel.style.width = Math.min(average * 0.5, 100) + '%';
-        //             }
-                    
-        //             // Обновляем статус
-        //             const userStatus = document.getElementById('user-status');
-        //             if (userStatus && !isMuted) {
-        //                 if (average > 20) {
-        //                     userStatus.textContent = 'Говорит';
-        //                     document.getElementById('user-pulse').style.animation = 'pulse 1s infinite';
-        //                 } else {
-        //                     userStatus.textContent = 'Слушает';
-        //                     document.getElementById('user-pulse').style.animation = 'none';
-        //                 }
-        //             }
-                    
-        //             if (isCallActive) {
-        //                 requestAnimationFrame(updateVolume);
-        //             }
-        //         }
-                
-        //         updateVolume();
-                
-        //     } catch (error) {
-        //         console.error('Audio analysis error:', error);
-        //     }
-        // }
 
         function startAudioAnalysis() {
             if (!audioStream) {
@@ -2324,61 +2378,6 @@
                 console.error('Audio analysis error:', error);
             }
         }
-
-        
-        // function setupRemoteAudioAnalysis() {
-        //     const remoteAudio = document.getElementById('remote-audio');
-        //     if (!remoteAudio || !remoteAudio.srcObject) return;
-            
-        //     try {
-        //         const remoteAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-        //         const remoteAnalyser = remoteAudioContext.createAnalyser();
-        //         const remoteSource = remoteAudioContext.createMediaStreamSource(remoteAudio.srcObject);
-        //         remoteSource.connect(remoteAnalyser);
-                
-        //         remoteAnalyser.fftSize = 256;
-        //         const bufferLength = remoteAnalyser.frequencyBinCount;
-        //         const dataArray = new Uint8Array(bufferLength);
-                
-        //         function updateRemoteVolume() {
-        //             if (!remoteAnalyser) return;
-                    
-        //             remoteAnalyser.getByteFrequencyData(dataArray);
-        //             let sum = 0;
-        //             for (let i = 0; i < bufferLength; i++) {
-        //                 sum += dataArray[i];
-        //             }
-        //             let average = sum / bufferLength;
-                    
-        //             // Обновляем индикатор громкости собеседника
-        //             const contactVolume = document.getElementById('contact-volume');
-        //             if (contactVolume) {
-        //                 contactVolume.style.width = Math.min(average * 2, 100) + '%';
-        //             }
-                    
-        //             // Обновляем статус собеседника
-        //             const contactStatus = document.getElementById('contact-status');
-        //             if (contactStatus) {
-        //                 if (average > 5) {
-        //                     contactStatus.textContent = 'Говорит';
-        //                     document.getElementById('contact-pulse').style.animation = 'pulse 2s infinite';
-        //                 } else {
-        //                     contactStatus.textContent = 'Слушает';
-        //                     document.getElementById('contact-pulse').style.animation = 'none';
-        //                 }
-        //             }
-                    
-        //             if (isCallActive) {
-        //                 requestAnimationFrame(updateRemoteVolume);
-        //             }
-        //         }
-                
-        //         updateRemoteVolume();
-                
-        //     } catch (error) {
-        //         console.error('Remote audio analysis error:', error);
-        //     }
-        // }
 
         function setupRemoteAudioAnalysis() {
             const remoteAudio = document.getElementById('remote-audio');
@@ -3169,6 +3168,25 @@
                     sendMessage();
                 }
             });
+
+              // Обработчик для мобильных устройств
+            const contactsSidebar = document.querySelector('.contacts-sidebar');
+            if (window.innerWidth <= 768) {
+                contactsSidebar.addEventListener('click', function(e) {
+                    if (!this.classList.contains('mobile-expanded')) {
+                        this.classList.add('mobile-expanded');
+                        e.stopPropagation();
+                    }
+                });
+                
+                // Закрытие по клику вне сайдбара
+                document.addEventListener('click', function(e) {
+                    if (contactsSidebar.classList.contains('mobile-expanded') && 
+                        !contactsSidebar.contains(e.target)) {
+                        contactsSidebar.classList.remove('mobile-expanded');
+                    }
+                });
+            }
             
             // Автоматическое изменение высоты текстового поля
             const messageInput = document.getElementById('message-input');
@@ -3289,6 +3307,7 @@
     </script>
 </body>
 </html>
+
 
 
 
