@@ -1601,6 +1601,27 @@
                     }
                 };
 
+                peerConnection.onconnectionstatechange = () => {
+                    console.log('Connection state:', peerConnection.connectionState);
+                    
+                    // Обновляем статусы при изменении состояния соединения
+                    updateConnectionStatus();
+                    
+                    if (peerConnection.connectionState === 'connected') {
+                        showNotification('Звонок', 'Соединение установлено', 'success');
+                    } else if (peerConnection.connectionState === 'disconnected' || 
+                               peerConnection.connectionState === 'failed') {
+                        // Не завершаем звонок сразу, даем шанс на восстановление
+                        setTimeout(() => {
+                            if (peerConnection && (peerConnection.connectionState === 'disconnected' || 
+                                                  peerConnection.connectionState === 'failed')) {
+                                endCall();
+                                showNotification('Звонок', 'Соединение прервано', 'error');
+                            }
+                        }, 3000);
+                    }
+                };
+
                 peerConnection.onsignalingstatechange = () => {
                     console.log('Signaling state changed to:', peerConnection.signalingState);
                     
@@ -1650,6 +1671,25 @@
             } catch (error) {
                 console.error('WebRTC initialization error:', error);
                 showNotification('Ошибка', 'Не удалось инициализировать звонок', 'error');
+            }
+        }
+
+        function updateConnectionStatus() {
+            if (!peerConnection || !isCallActive) return;
+            
+            const connectionState = peerConnection.connectionState;
+            const userStatus = document.getElementById('user-status');
+            const contactStatus = document.getElementById('contact-status');
+            
+            if (connectionState === 'connected') {
+                contactStatus.textContent = 'Соединение установлено';
+                userStatus.textContent = isMuted ? 'Микрофон выключен' : 'Готов к разговору';
+            } else if (connectionState === 'connecting') {
+                contactStatus.textContent = 'Подключается...';
+                userStatus.textContent = 'Подключается...';
+            } else if (connectionState === 'disconnected') {
+                contactStatus.textContent = 'Соединение потеряно';
+                userStatus.textContent = 'Соединение потеряно';
             }
         }
         
@@ -2102,6 +2142,57 @@
             showNotification('Звонок', 'Звонок завершен', 'info');
         }
         
+        // function showCallInterface() {
+        //     const callContainer = document.getElementById('call-container');
+        //     callContainer.classList.add('active');
+        //     isCallActive = true;
+            
+        //     // Обновляем информацию
+        //     document.getElementById('contact-call-name').textContent = currentContact.name || currentContact.username;
+        //     document.getElementById('contact-call-avatar').src = currentContact.avatar || './free-icon-user-avatar-3607444.png';
+        //     document.getElementById('user-call-name').textContent = currentUser.name || currentUser.username;
+            
+        //     // Показываем статус соединения
+        //     document.getElementById('user-status').textContent = 'Подключается...';
+        //     document.getElementById('contact-status').textContent = 'Установка соединения';
+            
+        //     // Запускаем анимацию подключения
+        //     const statusElement = document.getElementById('contact-status');
+        //     let dots = 0;
+        //     const connectingInterval = setInterval(() => {
+        //         dots = (dots + 1) % 4;
+        //         statusElement.textContent = 'Установка соединения' + '.'.repeat(dots);
+                
+        //         if (!isCallActive) {
+        //             clearInterval(connectingInterval);
+        //         }
+        //     }, 500);
+        // }
+
+        function checkConnectionStatus() {
+            if (!isCallActive) return;
+            
+            if (peerConnection) {
+                const connectionState = peerConnection.connectionState;
+                const iceState = peerConnection.iceConnectionState;
+                
+                // Обновляем статус в зависимости от состояния соединения
+                if (connectionState === 'connected') {
+                    document.getElementById('contact-status').textContent = 'Соединение установлено';
+                    document.getElementById('user-status').textContent = isMuted ? 'Микрофон выключен' : 'Готов к разговору';
+                } else if (connectionState === 'connecting' || iceState === 'checking') {
+                    document.getElementById('contact-status').textContent = 'Подключается...';
+                    document.getElementById('user-status').textContent = 'Подключается...';
+                } else if (connectionState === 'disconnected' || connectionState === 'failed') {
+                    document.getElementById('contact-status').textContent = 'Соединение прервано';
+                    document.getElementById('user-status').textContent = 'Соединение прервано';
+                }
+            }
+            
+            // Продолжаем проверять каждые 2 секунды
+            setTimeout(checkConnectionStatus, 2000);
+        }
+
         function showCallInterface() {
             const callContainer = document.getElementById('call-container');
             callContainer.classList.add('active');
@@ -2112,24 +2203,72 @@
             document.getElementById('contact-call-avatar').src = currentContact.avatar || './free-icon-user-avatar-3607444.png';
             document.getElementById('user-call-name').textContent = currentUser.name || currentUser.username;
             
-            // Показываем статус соединения
-            document.getElementById('user-status').textContent = 'Подключается...';
-            document.getElementById('contact-status').textContent = 'Установка соединения';
+            // Устанавливаем начальные статусы
+            document.getElementById('user-status').textContent = isMuted ? 'Микрофон выключен' : 'Подключается...';
+            document.getElementById('contact-status').textContent = 'Подключается...';
             
-            // Запускаем анимацию подключения
-            const statusElement = document.getElementById('contact-status');
-            let dots = 0;
-            const connectingInterval = setInterval(() => {
-                dots = (dots + 1) % 4;
-                statusElement.textContent = 'Установка соединения' + '.'.repeat(dots);
-                
-                if (!isCallActive) {
-                    clearInterval(connectingInterval);
-                }
-            }, 500);
+            // Запускаем проверку состояния соединения
+            checkConnectionStatus();
         }
-        
+                
         // ===== ФУНКЦИИ ДЛЯ АНАЛИЗА АУДИО (исправленные) =====
+        // function startAudioAnalysis() {
+        //     if (!audioStream) {
+        //         console.log('No audio stream for analysis');
+        //         return;
+        //     }
+            
+        //     try {
+        //         // Создаем новый аудиоконтекст для анализа
+        //         const analysisContext = new (window.AudioContext || window.webkitAudioContext)();
+        //         const analysisAnalyser = analysisContext.createAnalyser();
+        //         const analysisSource = analysisContext.createMediaStreamSource(audioStream);
+        //         analysisSource.connect(analysisAnalyser);
+                
+        //         analysisAnalyser.fftSize = 256;
+        //         const bufferLength = analysisAnalyser.frequencyBinCount;
+        //         const dataArray = new Uint8Array(bufferLength);
+                
+        //         function updateVolume() {
+        //             if (!analysisAnalyser) return;
+                    
+        //             analysisAnalyser.getByteFrequencyData(dataArray);
+        //             let sum = 0;
+        //             for (let i = 0; i < bufferLength; i++) {
+        //                 sum += dataArray[i];
+        //             }
+        //             let average = sum / bufferLength;
+                    
+        //             // Обновляем индикатор громкости
+        //             const volumeLevel = document.getElementById('user-volume');
+        //             if (volumeLevel) {
+        //                 volumeLevel.style.width = Math.min(average * 0.5, 100) + '%';
+        //             }
+                    
+        //             // Обновляем статус
+        //             const userStatus = document.getElementById('user-status');
+        //             if (userStatus && !isMuted) {
+        //                 if (average > 20) {
+        //                     userStatus.textContent = 'Говорит';
+        //                     document.getElementById('user-pulse').style.animation = 'pulse 1s infinite';
+        //                 } else {
+        //                     userStatus.textContent = 'Слушает';
+        //                     document.getElementById('user-pulse').style.animation = 'none';
+        //                 }
+        //             }
+                    
+        //             if (isCallActive) {
+        //                 requestAnimationFrame(updateVolume);
+        //             }
+        //         }
+                
+        //         updateVolume();
+                
+        //     } catch (error) {
+        //         console.error('Audio analysis error:', error);
+        //     }
+        // }
+
         function startAudioAnalysis() {
             if (!audioStream) {
                 console.log('No audio stream for analysis');
@@ -2137,7 +2276,6 @@
             }
             
             try {
-                // Создаем новый аудиоконтекст для анализа
                 const analysisContext = new (window.AudioContext || window.webkitAudioContext)();
                 const analysisAnalyser = analysisContext.createAnalyser();
                 const analysisSource = analysisContext.createMediaStreamSource(audioStream);
@@ -2148,7 +2286,7 @@
                 const dataArray = new Uint8Array(bufferLength);
                 
                 function updateVolume() {
-                    if (!analysisAnalyser) return;
+                    if (!analysisAnalyser || !isCallActive) return;
                     
                     analysisAnalyser.getByteFrequencyData(dataArray);
                     let sum = 0;
@@ -2163,9 +2301,9 @@
                         volumeLevel.style.width = Math.min(average * 0.5, 100) + '%';
                     }
                     
-                    // Обновляем статус
+                    // Обновляем статус только если соединение установлено
                     const userStatus = document.getElementById('user-status');
-                    if (userStatus && !isMuted) {
+                    if (userStatus && !isMuted && peerConnection && peerConnection.connectionState === 'connected') {
                         if (average > 20) {
                             userStatus.textContent = 'Говорит';
                             document.getElementById('user-pulse').style.animation = 'pulse 1s infinite';
@@ -2186,7 +2324,62 @@
                 console.error('Audio analysis error:', error);
             }
         }
+
         
+        // function setupRemoteAudioAnalysis() {
+        //     const remoteAudio = document.getElementById('remote-audio');
+        //     if (!remoteAudio || !remoteAudio.srcObject) return;
+            
+        //     try {
+        //         const remoteAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        //         const remoteAnalyser = remoteAudioContext.createAnalyser();
+        //         const remoteSource = remoteAudioContext.createMediaStreamSource(remoteAudio.srcObject);
+        //         remoteSource.connect(remoteAnalyser);
+                
+        //         remoteAnalyser.fftSize = 256;
+        //         const bufferLength = remoteAnalyser.frequencyBinCount;
+        //         const dataArray = new Uint8Array(bufferLength);
+                
+        //         function updateRemoteVolume() {
+        //             if (!remoteAnalyser) return;
+                    
+        //             remoteAnalyser.getByteFrequencyData(dataArray);
+        //             let sum = 0;
+        //             for (let i = 0; i < bufferLength; i++) {
+        //                 sum += dataArray[i];
+        //             }
+        //             let average = sum / bufferLength;
+                    
+        //             // Обновляем индикатор громкости собеседника
+        //             const contactVolume = document.getElementById('contact-volume');
+        //             if (contactVolume) {
+        //                 contactVolume.style.width = Math.min(average * 2, 100) + '%';
+        //             }
+                    
+        //             // Обновляем статус собеседника
+        //             const contactStatus = document.getElementById('contact-status');
+        //             if (contactStatus) {
+        //                 if (average > 5) {
+        //                     contactStatus.textContent = 'Говорит';
+        //                     document.getElementById('contact-pulse').style.animation = 'pulse 2s infinite';
+        //                 } else {
+        //                     contactStatus.textContent = 'Слушает';
+        //                     document.getElementById('contact-pulse').style.animation = 'none';
+        //                 }
+        //             }
+                    
+        //             if (isCallActive) {
+        //                 requestAnimationFrame(updateRemoteVolume);
+        //             }
+        //         }
+                
+        //         updateRemoteVolume();
+                
+        //     } catch (error) {
+        //         console.error('Remote audio analysis error:', error);
+        //     }
+        // }
+
         function setupRemoteAudioAnalysis() {
             const remoteAudio = document.getElementById('remote-audio');
             if (!remoteAudio || !remoteAudio.srcObject) return;
@@ -2202,7 +2395,7 @@
                 const dataArray = new Uint8Array(bufferLength);
                 
                 function updateRemoteVolume() {
-                    if (!remoteAnalyser) return;
+                    if (!remoteAnalyser || !isCallActive) return;
                     
                     remoteAnalyser.getByteFrequencyData(dataArray);
                     let sum = 0;
@@ -2217,9 +2410,9 @@
                         contactVolume.style.width = Math.min(average * 2, 100) + '%';
                     }
                     
-                    // Обновляем статус собеседника
+                    // Обновляем статус собеседника только если соединение установлено
                     const contactStatus = document.getElementById('contact-status');
-                    if (contactStatus) {
+                    if (contactStatus && peerConnection && peerConnection.connectionState === 'connected') {
                         if (average > 5) {
                             contactStatus.textContent = 'Говорит';
                             document.getElementById('contact-pulse').style.animation = 'pulse 2s infinite';
@@ -3093,73 +3286,10 @@
         
         // Проверяем разрешения при загрузке
         setTimeout(checkAudioPermissions, 1000);
-        
-        // ===== ДЕБАГ ФУНКЦИИ =====
-        // function debugWebRTC() {
-        //     console.log('=== WebRTC DEBUG ===');
-        //     console.log('peerConnection:', peerConnection ? 'exists' : 'null');
-        //     if (peerConnection) {
-        //         console.log('connectionState:', peerConnection.connectionState);
-        //         console.log('signalingState:', peerConnection.signalingState);
-        //         console.log('iceConnectionState:', peerConnection.iceConnectionState);
-        //         console.log('remoteDescription:', peerConnection.remoteDescription ? 'set' : 'null');
-        //         console.log('localDescription:', peerConnection.localDescription ? 'set' : 'null');
-                
-        //         const senders = peerConnection.getSenders();
-        //         const receivers = peerConnection.getReceivers();
-        //         console.log('Senders:', senders.length);
-        //         console.log('Receivers:', receivers.length);
-        //     }
-        //     console.log('audioStream:', audioStream ? 'exists' : 'null');
-        //     console.log('isCallActive:', isCallActive);
-        //     console.log('isCaller:', isCaller);
-        //     console.log('currentCallId:', currentCallId);
-        //     console.log('pendingIceCandidates:', pendingIceCandidates.length);
-        // }
-        
-        // function addDebugButton() {
-        //     const debugBtn = document.createElement('button');
-        //     debugBtn.innerHTML = '🛠️ Debug';
-        //     debugBtn.style.cssText = 'position: fixed; bottom: 10px; right: 10px; z-index: 9999; padding: 10px; background: #7a64ff; color: white; border: none; border-radius: 5px; cursor: pointer;';
-        //     debugBtn.onclick = debugWebRTC;
-        //     document.body.appendChild(debugBtn);
-        // }
-        
-        // // Добавляем debug кнопку после загрузки
-        // setTimeout(addDebugButton, 2000);
-        
-        // // Добавим debug функцию для проверки
-        // function debugWebRTC() {
-        //     console.log('=== WebRTC DEBUG ===');
-        //     console.log('peerConnection:', peerConnection ? 'exists' : 'null');
-        //     if (peerConnection) {
-        //         console.log('connectionState:', peerConnection.connectionState);
-        //         console.log('signalingState:', peerConnection.signalingState);
-        //         console.log('iceConnectionState:', peerConnection.iceConnectionState);
-        //         console.log('remoteDescription:', peerConnection.remoteDescription ? 'set' : 'null');
-        //         console.log('localDescription:', peerConnection.localDescription ? 'set' : 'null');
-        //     }
-        //     console.log('audioStream:', audioStream ? 'exists' : 'null');
-        //     console.log('isCallActive:', isCallActive);
-        //     console.log('isCaller:', isCaller);
-        //     console.log('currentCallId:', currentCallId);
-        // }
-        
-        // // Добавим кнопку debug в интерфейс
-        // function addDebugButton() {
-        //     const debugBtn = document.createElement('button');
-        //     debugBtn.innerHTML = '🛠️ Debug';
-        //     debugBtn.style.cssText = 'position: fixed; bottom: 10px; right: 10px; z-index: 9999; padding: 10px;';
-        //     debugBtn.onclick = debugWebRTC;
-        //     document.body.appendChild(debugBtn);
-        // }
-        
-        // // Добавляем debug кнопку после загрузки
-        // setTimeout(addDebugButton, 2000);
-
     </script>
 </body>
 </html>
+
 
 
 
