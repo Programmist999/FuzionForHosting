@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FuzionPrime Messenger</title>
+    <title>Prime Messenger</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -207,7 +207,7 @@
 
         .collapsed-search-icon {
             position: absolute;
-            top: 85px;
+            top: 100px;
             left: 50%;
             transform: translateX(-50%);
             width: 40px;
@@ -329,32 +329,6 @@
             text-overflow: ellipsis;
         }
         
-        .sidebar-collapsed-indicator {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-90deg);
-            color: #7a64ff;
-            font-size: 16px;
-            font-weight: 600;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            opacity: 0.7;
-            transition: all 0.3s ease;
-            white-space: nowrap;
-        }
-        
-        .sidebar-collapsed-indicator i {
-            font-size: 24px;
-            animation: pulse 2s infinite;
-        }
-        
-        .contacts-sidebar:hover .sidebar-collapsed-indicator {
-            opacity: 0;
-            pointer-events: none;
-        }
         
         .contact-item:nth-child(1) { transition-delay: 0.05s; }
         .contact-item:nth-child(2) { transition-delay: 0.1s; }
@@ -1496,10 +1470,6 @@
                 width: 280px;
             }
             
-            .contacts-sidebar.mobile-expanded .sidebar-collapsed-indicator {
-                opacity: 0;
-            }
-            
             .contacts-sidebar.mobile-expanded .contact-info {
                 opacity: 1;
             }
@@ -1510,14 +1480,6 @@
             
             .contacts-sidebar.mobile-expanded .sidebar-header h2 {
                 opacity: 1;
-            }
-            
-            .sidebar-collapsed-indicator {
-                font-size: 14px;
-            }
-            
-            .sidebar-collapsed-indicator i {
-                font-size: 20px;
             }
             
             .main-content {
@@ -1621,11 +1583,7 @@
                     </div>
                 </div>
                 
-                <!-- Индикатор при свёрнутом состоянии -->
-                <div class="sidebar-collapsed-indicator">
-                    <i class="fas fa-comments"></i>
-                    <span>Чаты</span>
-                </div>
+                
 
                 <div class="collapsed-search-icon">
                     <i class="fas fa-search"></i>
@@ -3607,6 +3565,7 @@
     </script>
 </body>
 </html>
+
 
 
 
