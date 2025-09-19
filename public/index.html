@@ -431,23 +431,22 @@
         }
         
         .input-area {
-            padding: 22px 30px;
-            background: rgba(18, 21, 56, 0.4); /* Увеличиваем прозрачность */
-            border-top: 1px solid rgba(101, 78, 163, 0.2); /* Более прозрачная граница */
+            padding: 10px 15px;
+            background: rgba(18, 21, 56, 0);
+            border-top: 0px solid rgba(101, 78, 163, 0.2);
             display: flex;
             align-items: center;
-            backdrop-filter: blur(15px); /* Увеличиваем размытие */
-            -webkit-backdrop-filter: blur(15px); /* Для Safari */
             transition: all 0.3s ease;
-            gap: 15px;
-            position: relative;
-            z-index: 10;
+            position: absolute; /* Меняем на fixed */
+            bottom: 0; /* Прижимаем к низу */
+            left: 0;
+            right: 0;
+            z-index: 1000; /* Увеличиваем z-index */
+            width: 100%; /* На всю ширину */
         }
 
-        /* Дополнительные стили для лучшего эффекта стекла */
         .input-area::before {
             content: '';
-            position: absolute;
             top: 0;
             left: 0;
             right: 0;
@@ -457,14 +456,6 @@
                 rgba(200, 80, 192, 0.05) 100%);
             border-radius: 0;
             z-index: -1;
-        }
-        
-        /* Эффект при наведении на всю область */
-        .input-area:hover {
-            background: rgba(18, 21, 56, 0.5);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(101, 78, 163, 0.3);
         }
 
 
@@ -489,6 +480,7 @@
             flex-shrink: 0;
         }
 
+
         .attach-btn:hover, .emoji-btn:hover {
             background: rgba(101, 78, 163, 0.4);
             transform: translateY(-2px);
@@ -512,19 +504,20 @@
             width: 25%;
             padding: 16px 22px;
             border-radius: 14px;
-            border: 1px solid rgba(101, 78, 163, 0.4);
+            border: 1px solid rgba(101, 78, 163, 0.281);
             font-size: 15px;
             resize: none;
             max-height: 120px;
             overflow-y: auto;
             transition: all 0.3s ease;
-            background: rgba(13, 15, 35, 0.8);
+            background: rgba(13, 15, 35, 0.089); /* Полупрозрачный фон */
             color: #fff;
             height: 50px;
             min-height: 50px;
             display: center;
             justify-content: center;
             align-items: center;
+            backdrop-filter: blur(20px);
         }
 
         .message-input:focus {
@@ -532,14 +525,15 @@
             border-color: #7a64ff;
             box-shadow: 0 0 20px rgba(122, 100, 255, 0.3);
             width: 75%;
+            background: rgba(13, 15, 35, 0.9); /* Чуть менее прозрачный при фокусе */
         }
 
         .message-input:hover {
-            border-color: #7a64ff;
-            background: rgba(13, 15, 35, 0.9);
+            border-color: #7b64ff;
+            background: rgba(13, 15, 35, 0.089); /* Полупрозрачный фон */
             width: 75%;
         }
-
+        
         .message-input::placeholder {
             color: #5a5a8c;
             transition: all 0.3s ease;
@@ -1594,26 +1588,28 @@
                     <div class="welcome-message" id="welcome-message">
                         <p>Добро пожаловать в Prime Messenger! Выберите чат для начала общения.</p>
                     </div>
+
+                   <div class="input-area">
+                        <div class="input-actions">
+                            <button class="attach-btn" title="Прикрепить файл">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <button class="emoji-btn" title="Смайлики">
+                                <i class="fas fa-smile"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="message-input-container">
+                            <textarea class="message-input" id="message-input" placeholder="Сообщение..." rows="1" disabled></textarea>
+                        </div>
+                        
+                        <button class="send-btn" id="send-btn" disabled>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
                 </div>
                 
-                <div class="input-area">
-                    <div class="input-actions">
-                        <button class="attach-btn" title="Прикрепить файл">
-                            <i class="fas fa-paperclip"></i>
-                        </button>
-                        <button class="emoji-btn" title="Смайлики">
-                            <i class="fas fa-smile"></i>
-                        </button>
-                    </div>
-                    
-                    <div class="message-input-container">
-                        <textarea class="message-input" id="message-input" placeholder="Сообщение..." rows="1" disabled></textarea>
-                    </div>
-                    
-                    <button class="send-btn" id="send-btn" disabled>
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
+                
                 
                 <!-- Аудио элемент для удаленного звука -->
                 <audio id="remote-audio" autoplay style="display: none;"></audio>
@@ -3473,6 +3469,7 @@
     </script>
 </body>
 </html>
+
 
 
 
