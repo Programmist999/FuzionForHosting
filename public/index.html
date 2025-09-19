@@ -2102,7 +2102,7 @@
         let recordingTimer = null;
         let recordingStartTime = 0;
         let recordingAudioContext = null;
-        let analyser = null;
+        let recordingAnalyser = null;
         let visualizerInterval = null;
         
         // WebRTC переменные
@@ -2394,10 +2394,10 @@
                 analyser = audioContext.createAnalyser();
                 const source = audioContext.createMediaStreamSource(stream);
                 
-                source.connect(analyser);
-                analyser.fftSize = 256;
+                source.connect(recordingAnalyser);
+                recordingAnalyser.fftSize = 256;
                 
-                const bufferLength = analyser.frequencyBinCount;
+                const bufferLength = recordingAnalyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
                 const visualizer = document.getElementById('recording-visualizer');
                 
@@ -2415,7 +2415,7 @@
                 const bars = visualizer.querySelectorAll('.visualizer-bar');
                 
                 visualizerInterval = setInterval(() => {
-                    analyser.getByteFrequencyData(dataArray);
+                    recordingAnalyser.getByteFrequencyData(dataArray);
                     
                     // Обновляем высоту баров
                     bars.forEach((bar, index) => {
@@ -4063,6 +4063,7 @@
     </script>
 </body>
 </html>
+
 
 
 
