@@ -6,6 +6,9 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,6 +20,7 @@ app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cors());
 app.use(express.static('public'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Хранилище WebSocket соединений
 const userConnections = new Map();
@@ -60,6 +64,37 @@ wss.on('connection', (ws, request) => {
     ws.on('error', (error) => {
         console.error('WebSocket error:', error);
     });
+});
+
+// Создаем папку для аудиофайлов если её нет
+const audioDir = path.join(__dirname, 'uploads', 'audio');
+if (!fs.existsSync(audioDir)) {
+    fs.mkdirSync(audioDir, { recursive: true });
+}
+
+// Настройка multer для аудиофайлов
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, audioDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'voice-' + uniqueSuffix + '.webm');
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB limit
+    },
+    fileFilter: function (req, file, cb) {
+        if (file.mimetype.startsWith('audio/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Только аудиофайлы разрешены'), false);
+        }
+    }
 });
 
 function handleWebSocketMessage(userId, data) {
@@ -255,11 +290,30 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
         });
         
         // Создание таблицы сообщений
+        // db.run(`CREATE TABLE IF NOT EXISTS messages (
+        //     id INTEGER PRIMARY KEY AUTOINCREMENT,
+        //     sender_id INTEGER NOT NULL,
+        //     receiver_id INTEGER NOT NULL,
+        //     message_text TEXT NOT NULL,
+        //     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        //     is_read INTEGER DEFAULT 0,
+        //     FOREIGN KEY (sender_id) REFERENCES users (id),
+        //     FOREIGN KEY (receiver_id) REFERENCES users (id)
+        // )`, (err) => {
+        //     if (err) {
+        //         console.error('Ошибка создания таблицы messages:', err);
+        //     } else {
+        //         console.log('Таблица messages готова.');
+        //     }
+        // });
         db.run(`CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sender_id INTEGER NOT NULL,
             receiver_id INTEGER NOT NULL,
-            message_text TEXT NOT NULL,
+            message_text TEXT,
+            audio_url TEXT,
+            duration INTEGER,
+            message_type TEXT DEFAULT 'text',
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             is_read INTEGER DEFAULT 0,
             FOREIGN KEY (sender_id) REFERENCES users (id),
@@ -293,6 +347,80 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                     }
                 );
             }
+        });
+    }
+});
+
+app.post('/api/send-voice-message', upload.single('audio'), async (req, res) => {
+    try {
+        const { senderId, receiverId, duration } = req.body;
+        const audioFile = req.file;
+
+        if (!senderId || !receiverId || !duration || !audioFile) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Отсутствуют обязательные поля' 
+            });
+        }
+
+        // Создаем URL для доступа к файлу
+        const audioUrl = `/uploads/audio/${audioFile.filename}`;
+
+        // Сохраняем в базу данных
+        db.run(
+            `INSERT INTO messages (sender_id, receiver_id, audio_url, duration, message_type) 
+             VALUES (?, ?, ?, ?, ?)`,
+            [senderId, receiverId, audioUrl, duration, 'voice'],
+            function(err) {
+                if (err) {
+                    console.error('Ошибка сохранения голосового сообщения:', err);
+                    
+                    // Удаляем файл если не удалось сохранить в БД
+                    fs.unlinkSync(audioFile.path);
+                    
+                    return res.status(500).json({ 
+                        success: false, 
+                        error: 'Ошибка при сохранении сообщения' 
+                    });
+                }
+
+                // Получаем полную информацию о сообщении
+                db.get(
+                    `SELECT m.*, u.username as sender_username, u.name as sender_name, u.avatar as sender_avatar
+                     FROM messages m
+                     JOIN users u ON m.sender_id = u.id
+                     WHERE m.id = ?`,
+                    [this.lastID],
+                    (err, message) => {
+                        if (err) {
+                            console.error('Ошибка получения сообщения:', err);
+                            return res.status(500).json({ 
+                                success: false, 
+                                error: 'Ошибка при получении данных сообщения' 
+                            });
+                        }
+
+                        res.json({ 
+                            success: true,
+                            message: 'Голосовое сообщение отправлено',
+                            messageData: message
+                        });
+                    }
+                );
+            }
+        );
+
+    } catch (error) {
+        console.error('Ошибка отправки голосового сообщения:', error);
+        
+        // Удаляем файл в случае ошибки
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        
+        res.status(500).json({ 
+            success: false, 
+            error: 'Ошибка при обработке голосового сообщения' 
         });
     }
 });
@@ -478,6 +606,17 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
                 return res.status(500).json({ success: false, error: 'Ошибка при получении сообщений' });
             }
             
+            // Добавляем полный URL для аудиофайлов
+            const messagesWithFullUrls = messages.map(message => {
+                if (message.audio_url) {
+                    return {
+                        ...message,
+                        audio_url: `${req.protocol}://${req.get('host')}${message.audio_url}`
+                    };
+                }
+                return message;
+            });
+            
             db.run(
                 'UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0',
                 [userId1, userId2],
@@ -486,11 +625,55 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
                         console.error('Ошибка обновления статуса сообщений:', err);
                     }
                     
-                    res.json({ success: true, messages });
+                    res.json({ success: true, messages: messagesWithFullUrls });
                 }
             );
         }
     );
+});
+
+function cleanupOldAudioFiles() {
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    
+    db.all(
+        'SELECT audio_url FROM messages WHERE audio_url IS NOT NULL AND timestamp < ?',
+        [new Date(thirtyDaysAgo).toISOString()],
+        (err, rows) => {
+            if (err) {
+                console.error('Ошибка получения старых аудиофайлов:', err);
+                return;
+            }
+            
+            rows.forEach(row => {
+                const filePath = path.join(__dirname, 'uploads', 'audio', path.basename(row.audio_url));
+                if (fs.existsSync(filePath)) {
+                    fs.unlink(filePath, (err) => {
+                        if (err) {
+                            console.error('Ошибка удаления файла:', filePath, err);
+                        } else {
+                            console.log('Удален старый аудиофайл:', filePath);
+                        }
+                    });
+                }
+            });
+        }
+    );
+}
+
+// Запускаем очистку при старте и затем каждый день
+cleanupOldAudioFiles();
+setInterval(cleanupOldAudioFiles, 24 * 60 * 60 * 1000);
+
+app.use((error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Размер файла не должен превышать 10MB' 
+            });
+        }
+    }
+    next(error);
 });
 
 app.get('/api/check-new-messages/:userId/:contactId', (req, res) => {
@@ -569,3 +752,4 @@ process.on('SIGINT', () => {
         });
     });
 });
+
