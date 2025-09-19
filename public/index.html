@@ -2101,7 +2101,7 @@
         let audioChunks = [];
         let recordingTimer = null;
         let recordingStartTime = 0;
-        let audioContext = null;
+        let recordingAudioContext = null;
         let analyser = null;
         let visualizerInterval = null;
         
@@ -2390,7 +2390,7 @@
         
         function setupAudioVisualizer(stream) {
             try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioContext = new (window.recordingAudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 const source = audioContext.createMediaStreamSource(stream);
                 
@@ -4063,6 +4063,7 @@
     </script>
 </body>
 </html>
+
 
 
 
