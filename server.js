@@ -8,7 +8,6 @@ const http = require('http');
 const WebSocket = require('ws');
 const multer = require('multer');
 const fs = require('fs');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -752,4 +751,5 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
