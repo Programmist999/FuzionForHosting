@@ -1589,7 +1589,7 @@
                         <p>Добро пожаловать в Prime Messenger! Выберите чат для начала общения.</p>
                     </div>
 
-                   <div class="input-area">
+                   <div class="input-area" id="input-area">
                         <div class="input-actions">
                             <button class="attach-btn" title="Прикрепить файл">
                                 <i class="fas fa-paperclip"></i>
@@ -2910,6 +2910,7 @@
             document.getElementById('message-input').disabled = false;
             document.getElementById('send-btn').disabled = false;
             document.getElementById('welcome-message').style.display = 'none';
+            document.getElementById('input-area').style.display = 'flex';
             await loadMessages();
         }
         
@@ -3469,6 +3470,7 @@
     </script>
 </body>
 </html>
+
 
 
 
