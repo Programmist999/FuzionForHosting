@@ -1316,6 +1316,220 @@
             opacity: 0.5;
         }
 
+        .voice-message-btn {
+            background: rgba(101, 78, 163, 0.2);
+            border: 1px solid rgba(101, 78, 163, 0.4);
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            color: #a594fe;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+        
+        .voice-message-btn:hover {
+            background: rgba(101, 78, 163, 0.4);
+            transform: translateY(-2px);
+            color: #7a64ff;
+        }
+        
+        .voice-message-btn.recording {
+            background: rgba(255, 77, 79, 0.3);
+            color: #ff4d4f;
+            animation: pulse 1.5s infinite;
+        }
+        
+        /* Стили для индикатора записи */
+        .voice-recorder-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 12, 30, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .voice-recorder-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .voice-recorder-box {
+            background: linear-gradient(135deg, #1a1c3d 0%, #24275a 100%);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(101, 78, 163, 0.3);
+            min-width: 300px;
+        }
+        
+        .recording-indicator {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .recording-indicator i {
+            font-size: 30px;
+            color: #ff4d4f;
+            z-index: 2;
+        }
+        
+        .recording-indicator .pulse-ring {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 2px solid #ff4d4f;
+            border-radius: 50%;
+            opacity: 0;
+            animation: pulse 2s infinite;
+        }
+        
+        .recording-timer {
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 25px;
+            font-family: monospace;
+        }
+        
+        .recording-controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+        
+        .cancel-recording-btn, .send-recording-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .cancel-recording-btn {
+            background: rgba(255, 77, 79, 0.2);
+            color: #ff4d4f;
+            border: 1px solid #ff4d4f;
+        }
+        
+        .cancel-recording-btn:hover {
+            background: rgba(255, 77, 79, 0.3);
+            transform: scale(1.1);
+        }
+        
+        .send-recording-btn {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+            border: 1px solid #4CAF50;
+        }
+        
+        .send-recording-btn:hover {
+            background: rgba(76, 175, 80, 0.3);
+            transform: scale(1.1);
+        }
+        
+        .recording-visualizer {
+            height: 40px;
+            margin-top: 20px;
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            justify-content: center;
+        }
+        
+        .visualizer-bar {
+            width: 4px;
+            background: linear-gradient(180deg, #7a64ff 0%, #c850c0 100%);
+            border-radius: 2px;
+            transition: height 0.1s ease;
+        }
+        
+        /* Стили для голосовых сообщений в чате */
+        .voice-message {
+            display: flex;
+            align-items: center;
+            padding: 12px 18px;
+            border-radius: 18px;
+            background: rgba(38, 41, 85, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .voice-message:hover {
+            background: rgba(38, 41, 85, 0.6);
+        }
+        
+        .voice-message-play-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(122, 100, 255, 0.2);
+            border: 1px solid rgba(122, 100, 255, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            color: #7a64ff;
+            transition: all 0.3s ease;
+        }
+        
+        .voice-message:hover .voice-message-play-btn {
+            background: rgba(122, 100, 255, 0.3);
+            transform: scale(1.1);
+        }
+        
+        .voice-message-duration {
+            font-size: 14px;
+            color: #a594fe;
+            margin-left: auto;
+            min-width: 40px;
+        }
+        
+        .voice-message-waveform {
+            flex: 1;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+        
+        .waveform-bar {
+            width: 3px;
+            background: rgba(122, 100, 255, 0.6);
+            border-radius: 1.5px;
+            transition: height 0.3s ease;
+        }
+        
+        .waveform-bar.active {
+            background: linear-gradient(180deg, #7a64ff 0%, #c850c0 100%);
+        }
+
         .incoming-call-box {
             text-align: center;
             max-width: 400px;
@@ -1420,6 +1634,20 @@
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.9);
+                opacity: 0.8;
+            }
+            50% {
+                opacity: 0.4;
+            }
+            100% {
+                transform: scale(1.1);
+                opacity: 0;
+            }
         }
 
         @media (max-width: 768px) {
@@ -1622,6 +1850,10 @@
                             <button class="emoji-btn" title="Смайлики">
                                 <i class="fas fa-smile"></i>
                             </button>
+
+                            <button class="voice-message-btn" id="voice-message-btn" title="Голосовое сообщение">
+                                <i class="fas fa-microphone"></i>
+                            </button>
                         </div>
                         
                         <div class="message-input-container">
@@ -1633,8 +1865,25 @@
                         </button>
                     </div>
                 </div>
-                
-                
+
+                <div class="voice-recorder-overlay" id="voice-recorder">
+                    <div class="voice-recorder-box">
+                        <div class="recording-indicator">
+                            <div class="pulse-ring"></div>
+                            <i class="fas fa-microphone"></i>
+                        </div>
+                        <div class="recording-timer" id="recording-timer">00:00</div>
+                        <div class="recording-controls">
+                            <button class="cancel-recording-btn" id="cancel-recording">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <button class="send-recording-btn" id="send-recording">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </div>
+                        <div class="recording-visualizer" id="recording-visualizer"></div>
+                    </div>
+                </div>
                 
                 <!-- Аудио элемент для удаленного звука -->
                 <audio id="remote-audio" autoplay style="display: none;"></audio>
@@ -1846,6 +2095,15 @@
         let searchTimeout = null;
         let messageCheckInterval = null;
         let websocket = null;
+
+        // ===== ПЕРЕМЕННЫЕ ДЛЯ ЗАПИСИ =====
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingTimer = null;
+        let recordingStartTime = 0;
+        let audioContext = null;
+        let analyser = null;
+        let visualizerInterval = null;
         
         // WebRTC переменные
         let peerConnection = null;
@@ -1997,6 +2255,190 @@
             } catch (error) {
                 console.error('WebRTC initialization error:', error);
                 showNotification('Ошибка', 'Не удалось инициализировать звонок', 'error');
+            }
+        }
+
+        async function startVoiceRecording() {
+            if (!currentUser || !currentContact) {
+                showNotification('Ошибка', 'Выберите чат для отправки голосового сообщения', 'error');
+                return;
+            }
+        
+            try {
+                // Запрашиваем доступ к микрофону
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    } 
+                });
+        
+                // Создаем медиа-рекордер
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+        
+                audioChunks = [];
+                
+                // Обработчик данных записи
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+        
+                // Запускаем визуализатор
+                setupAudioVisualizer(stream);
+        
+                // Запускаем запись
+                mediaRecorder.start(100); // Записываем chunks по 100ms
+                
+                // Обновляем UI
+                document.getElementById('voice-message-btn').classList.add('recording');
+                document.getElementById('voice-recorder').classList.add('active');
+                
+                // Запускаем таймер
+                startRecordingTimer();
+                
+                // Обработчик завершения записи
+                mediaRecorder.onstop = () => {
+                    stopRecordingTimer();
+                    stopAudioVisualizer();
+                    stream.getTracks().forEach(track => track.stop());
+                };
+        
+            } catch (error) {
+                console.error('Ошибка записи:', error);
+                showNotification('Ошибка', 'Не удалось получить доступ к микрофону', 'error');
+            }
+        }
+        
+        function stopVoiceRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                document.getElementById('voice-message-btn').classList.remove('recording');
+                document.getElementById('voice-recorder').classList.remove('active');
+            }
+        }
+        
+        function cancelRecording() {
+            stopVoiceRecording();
+            audioChunks = [];
+        }
+        
+        async function sendVoiceMessage() {
+            if (audioChunks.length === 0) {
+                showNotification('Ошибка', 'Нет записи для отправки', 'error');
+                return;
+            }
+        
+            try {
+                // Создаем Blob из записанных данных
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                
+                // Создаем FormData для отправки
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'voice-message.webm');
+                formData.append('senderId', currentUser.id);
+                formData.append('receiverId', currentContact.id);
+                formData.append('duration', Math.floor((Date.now() - recordingStartTime) / 1000));
+        
+                // Отправляем на сервер
+                const response = await fetch(`${API_BASE_URL}/api/send-voice-message`, {
+                    method: 'POST',
+                    body: formData
+                });
+        
+                const data = await response.json();
+        
+                if (data.success) {
+                    showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
+                    await loadMessages(); // Обновляем чат
+                } else {
+                    showNotification('Ошибка', 'Не удалось отправить голосовое сообщение', 'error');
+                }
+        
+            } catch (error) {
+                console.error('Ошибка отправки голосового сообщения:', error);
+                showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
+            } finally {
+                audioChunks = [];
+            }
+        }
+        
+        // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+        function startRecordingTimer() {
+            recordingStartTime = Date.now();
+            const timerElement = document.getElementById('recording-timer');
+            
+            recordingTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const seconds = (elapsed % 60).toString().padStart(2, '0');
+                timerElement.textContent = `${minutes}:${seconds}`;
+            }, 1000);
+        }
+        
+        function stopRecordingTimer() {
+            if (recordingTimer) {
+                clearInterval(recordingTimer);
+                recordingTimer = null;
+            }
+            document.getElementById('recording-timer').textContent = '00:00';
+        }
+        
+        function setupAudioVisualizer(stream) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
+                
+                source.connect(analyser);
+                analyser.fftSize = 256;
+                
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                const visualizer = document.getElementById('recording-visualizer');
+                
+                // Очищаем визуализатор
+                visualizer.innerHTML = '';
+                
+                // Создаем бары для визуализации
+                for (let i = 0; i < 20; i++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'visualizer-bar';
+                    bar.style.height = '5px';
+                    visualizer.appendChild(bar);
+                }
+                
+                const bars = visualizer.querySelectorAll('.visualizer-bar');
+                
+                visualizerInterval = setInterval(() => {
+                    analyser.getByteFrequencyData(dataArray);
+                    
+                    // Обновляем высоту баров
+                    bars.forEach((bar, index) => {
+                        const value = dataArray[Math.floor(index * bufferLength / bars.length)];
+                        const height = Math.max(5, value / 255 * 40);
+                        bar.style.height = height + 'px';
+                    });
+                }, 100);
+                
+            } catch (error) {
+                console.error('Ошибка визуализатора:', error);
+            }
+        }
+        
+        function stopAudioVisualizer() {
+            if (visualizerInterval) {
+                clearInterval(visualizerInterval);
+                visualizerInterval = null;
+            }
+            
+            const visualizer = document.getElementById('recording-visualizer');
+            if (visualizer) {
+                visualizer.innerHTML = '';
             }
         }
 
@@ -2955,37 +3397,6 @@
                 renderMessages([]);
             }
         }
-        
-        // function renderMessages(messages) {
-        //     const messagesContainer = document.getElementById('messages-container');
-        //     messagesContainer.innerHTML = '';
-            
-        //     if (!messages || messages.length === 0) {
-        //         messagesContainer.innerHTML = `
-        //             <div class="no-messages">
-        //                 <p>Нет сообщений. Начните общение!</p>
-        //             </div>
-        //         `;
-        //         return;
-        //     }
-            
-        //     messages.forEach(message => {
-        //         const messageElement = document.createElement('div');
-        //         const isOutgoing = message.sender_id == currentUser.id;
-                
-        //         messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
-        //         const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
-        //         messageElement.innerHTML = `
-        //             <div class="message-text">${escapeHtml(message.message_text)}</div>
-        //             <div class="message-time">${messageTime}</div>
-        //         `;
-                
-        //         messagesContainer.appendChild(messageElement);
-        //     });
-            
-        //     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        // }
 
         function renderMessages(messages) {
             const messagesContainer = document.getElementById('messages-container');
@@ -3001,6 +3412,29 @@
             // Очищаем только сообщения (но сохраняем welcome message)
             const welcomeMessage = document.getElementById('welcome-message');
             const messageElements = messagesContainer.querySelectorAll('.message, .no-messages');
+
+            // В цикле добавления сообщений добавьте обработку голосовых сообщений
+            messages.forEach(message => {
+                if (message.type === 'voice') {
+                    // Создаем элемент голосового сообщения
+                    const voiceMessageElement = createVoiceMessageElement(message);
+                    messagesContainer.appendChild(voiceMessageElement);
+                } else {
+                    // Обычное текстовое сообщение (ваш существующий код)
+                    const messageElement = document.createElement('div');
+                    const isOutgoing = message.sender_id == currentUser.id;
+                    
+                    messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+                    const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    messageElement.innerHTML = `
+                        <div class="message-text">${escapeHtml(message.message_text)}</div>
+                        <div class="message-time">${messageTime}</div>
+                    `;
+                    
+                    messagesContainer.appendChild(messageElement);
+                }
+            });
             
             messageElements.forEach(element => {
                 if (element !== welcomeMessage) {
@@ -3047,6 +3481,58 @@
             
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
+
+        function createVoiceMessageElement(message) {
+            const messageElement = document.createElement('div');
+            const isOutgoing = message.sender_id == currentUser.id;
+            
+            messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+            
+            messageElement.innerHTML = `
+                <div class="voice-message">
+                    <div class="voice-message-play-btn">
+                        <i class="fas fa-play"></i>
+                    </div>
+                    <div class="voice-message-waveform" id="waveform-${message.id}">
+                        <!-- waveform будет генерироваться динамически -->
+                    </div>
+                    <div class="voice-message-duration">${message.duration}s</div>
+                </div>
+                <div class="message-time">${new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+            `;
+            
+            // Генерируем waveform
+            generateWaveform(messageElement, message);
+            
+            // Добавляем обработчик воспроизведения
+            const playBtn = messageElement.querySelector('.voice-message-play-btn');
+            playBtn.addEventListener('click', () => playVoiceMessage(message.audio_url));
+            
+            return messageElement;
+        }
+        
+        function generateWaveform(element, message) {
+            const waveform = element.querySelector('.voice-message-waveform');
+            waveform.innerHTML = '';
+            
+            // Простая генерация waveform (можно улучшить)
+            for (let i = 0; i < 20; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'waveform-bar';
+                bar.style.height = (Math.random() * 25 + 5) + 'px'; // Случайная высота
+                waveform.appendChild(bar);
+            }
+        }
+        
+        async function playVoiceMessage(audioUrl) {
+            try {
+                const audio = new Audio(audioUrl);
+                audio.play().catch(e => console.error('Ошибка воспроизведения:', e));
+            } catch (error) {
+                console.error('Ошибка воспроизведения голосового сообщения:', error);
+            }
+        }
+
         
         async function sendMessage() {
             if (!currentUser || !currentContact) return;
@@ -3427,6 +3913,18 @@
                 }, 300);
             });
 
+            // Добавляем обработчики для голосовых сообщений
+            document.getElementById('voice-message-btn').addEventListener('click', function() {
+                if (this.classList.contains('recording')) {
+                    stopVoiceRecording();
+                } else {
+                    startVoiceRecording();
+                }
+            });
+            
+            document.getElementById('cancel-recording').addEventListener('click', cancelRecording);
+            document.getElementById('send-recording').addEventListener('click', sendVoiceMessage);
+
               // Обработчик для мобильных устройств
             const contactsSidebar = document.querySelector('.contacts-sidebar');
             if (window.innerWidth <= 768) {
@@ -3565,6 +4063,7 @@
     </script>
 </body>
 </html>
+
 
 
 
