@@ -13,8 +13,8 @@
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
-    "path": "^0.12.7",
-    "ws": "^8.14.2"
+    "ws": "^8.14.2",
+    "multer": "^1.4.5-lts.1"
   },
   "keywords": [
     "messenger",
@@ -26,3 +26,4 @@
   "author": "Your Name",
   "license": "MIT"
 }
+
