@@ -332,6 +332,9 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                         console.error('Ошибка создания новой таблицы messages:', err);
                     } else {
                         console.log('Новая таблица messages создана с полем audio_url');
+
+                        cleanupOldAudioFiles();
+                        setInterval(cleanupOldAudioFiles, 24 * 60 * 60 * 1000);
                     }
                 });
             }
@@ -671,10 +674,6 @@ function cleanupOldAudioFiles() {
     );
 }
 
-// Запускаем очистку при старте и затем каждый день
-cleanupOldAudioFiles();
-setInterval(cleanupOldAudioFiles, 24 * 60 * 60 * 1000);
-
 app.use((error, req, res, next) => {
     if (error instanceof multer.MulterError) {
         if (error.code === 'LIMIT_FILE_SIZE') {
@@ -763,6 +762,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
