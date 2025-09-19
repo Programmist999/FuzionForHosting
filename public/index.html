@@ -466,6 +466,9 @@
             flex: 1;
             transition: all 0.3s ease;
             min-width: 200px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .message-input-container:hover {
@@ -1561,7 +1564,19 @@
                 </div>
                 
                 <div class="input-area">
-                    <textarea class="message-input" id="message-input" placeholder="Введите сообщение..." rows="1" disabled></textarea>
+                    <div class="input-actions">
+                        <button class="attach-btn" title="Прикрепить файл">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <button class="emoji-btn" title="Смайлики">
+                            <i class="fas fa-smile"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="message-input-container">
+                        <textarea class="message-input" id="message-input" placeholder="Сообщение..." rows="1" disabled></textarea>
+                    </div>
+                    
                     <button class="send-btn" id="send-btn" disabled>
                         <i class="fas fa-paper-plane"></i>
                     </button>
@@ -3425,6 +3440,7 @@
     </script>
 </body>
 </html>
+
 
 
 
