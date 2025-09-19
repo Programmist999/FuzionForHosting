@@ -288,12 +288,14 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
             }
         });
         
-        // Создание таблицы сообщений
         // db.run(`CREATE TABLE IF NOT EXISTS messages (
         //     id INTEGER PRIMARY KEY AUTOINCREMENT,
         //     sender_id INTEGER NOT NULL,
         //     receiver_id INTEGER NOT NULL,
-        //     message_text TEXT NOT NULL,
+        //     message_text TEXT,
+        //     audio_url TEXT,
+        //     duration INTEGER,
+        //     message_type TEXT DEFAULT 'text',
         //     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         //     is_read INTEGER DEFAULT 0,
         //     FOREIGN KEY (sender_id) REFERENCES users (id),
@@ -305,23 +307,33 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
         //         console.log('Таблица messages готова.');
         //     }
         // });
-        db.run(`CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender_id INTEGER NOT NULL,
-            receiver_id INTEGER NOT NULL,
-            message_text TEXT,
-            audio_url TEXT,
-            duration INTEGER,
-            message_type TEXT DEFAULT 'text',
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            is_read INTEGER DEFAULT 0,
-            FOREIGN KEY (sender_id) REFERENCES users (id),
-            FOREIGN KEY (receiver_id) REFERENCES users (id)
-        )`, (err) => {
+
+        db.run('DROP TABLE IF EXISTS messages', (err) => {
             if (err) {
-                console.error('Ошибка создания таблицы messages:', err);
+                console.error('Ошибка удаления старой таблицы messages:', err);
             } else {
-                console.log('Таблица messages готова.');
+                console.log('Старая таблица messages удалена');
+                
+                // Создаем новую таблицу с полем audio_url
+                db.run(`CREATE TABLE messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sender_id INTEGER NOT NULL,
+                    receiver_id INTEGER NOT NULL,
+                    message_text TEXT,
+                    audio_url TEXT,
+                    duration INTEGER,
+                    message_type TEXT DEFAULT 'text',
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    is_read INTEGER DEFAULT 0,
+                    FOREIGN KEY (sender_id) REFERENCES users (id),
+                    FOREIGN KEY (receiver_id) REFERENCES users (id)
+                )`, (err) => {
+                    if (err) {
+                        console.error('Ошибка создания новой таблицы messages:', err);
+                    } else {
+                        console.log('Новая таблица messages создана с полем audio_url');
+                    }
+                });
             }
         });
         
@@ -751,5 +763,6 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
