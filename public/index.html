@@ -2390,9 +2390,10 @@
         
         function setupAudioVisualizer(stream) {
             try {
-                audioContext = new (window.recordingAudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                const source = audioContext.createMediaStreamSource(stream);
+                // Используем правильное создание AudioContext
+                recordingAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                recordingAnalyser = recordingAudioContext.createAnalyser();
+                const source = recordingAudioContext.createMediaStreamSource(stream);
                 
                 source.connect(recordingAnalyser);
                 recordingAnalyser.fftSize = 256;
@@ -2429,7 +2430,7 @@
                 console.error('Ошибка визуализатора:', error);
             }
         }
-        
+                
         function stopAudioVisualizer() {
             if (visualizerInterval) {
                 clearInterval(visualizerInterval);
@@ -4063,6 +4064,7 @@
     </script>
 </body>
 </html>
+
 
 
 
