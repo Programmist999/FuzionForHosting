@@ -2910,7 +2910,6 @@
             document.getElementById('message-input').disabled = false;
             document.getElementById('send-btn').disabled = false;
             document.getElementById('welcome-message').style.display = 'none';
-            document.getElementById('input-area').style.display = 'flex';
             await loadMessages();
         }
         
@@ -2932,33 +2931,94 @@
             }
         }
         
+        // function renderMessages(messages) {
+        //     const messagesContainer = document.getElementById('messages-container');
+        //     messagesContainer.innerHTML = '';
+            
+        //     if (!messages || messages.length === 0) {
+        //         messagesContainer.innerHTML = `
+        //             <div class="no-messages">
+        //                 <p>Нет сообщений. Начните общение!</p>
+        //             </div>
+        //         `;
+        //         return;
+        //     }
+            
+        //     messages.forEach(message => {
+        //         const messageElement = document.createElement('div');
+        //         const isOutgoing = message.sender_id == currentUser.id;
+                
+        //         messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+        //         const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+        //         messageElement.innerHTML = `
+        //             <div class="message-text">${escapeHtml(message.message_text)}</div>
+        //             <div class="message-time">${messageTime}</div>
+        //         `;
+                
+        //         messagesContainer.appendChild(messageElement);
+        //     });
+            
+        //     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        // }
+
         function renderMessages(messages) {
             const messagesContainer = document.getElementById('messages-container');
-            messagesContainer.innerHTML = '';
             
-            if (!messages || messages.length === 0) {
-                messagesContainer.innerHTML = `
-                    <div class="no-messages">
-                        <p>Нет сообщений. Начните общение!</p>
-                    </div>
-                `;
-                return;
+            // Сохраняем input-area перед очисткой
+            const inputArea = document.querySelector('.input-area');
+            
+            // Временно удаляем input-area из контейнера
+            if (inputArea) {
+                inputArea.remove();
             }
             
-            messages.forEach(message => {
-                const messageElement = document.createElement('div');
-                const isOutgoing = message.sender_id == currentUser.id;
-                
-                messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
-                const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
-                messageElement.innerHTML = `
-                    <div class="message-text">${escapeHtml(message.message_text)}</div>
-                    <div class="message-time">${messageTime}</div>
-                `;
-                
-                messagesContainer.appendChild(messageElement);
+            // Очищаем только сообщения (но сохраняем welcome message)
+            const welcomeMessage = document.getElementById('welcome-message');
+            const messageElements = messagesContainer.querySelectorAll('.message, .no-messages');
+            
+            messageElements.forEach(element => {
+                if (element !== welcomeMessage) {
+                    element.remove();
+                }
             });
+            
+            if (!messages || messages.length === 0) {
+                if (!welcomeMessage) {
+                    const noMessages = document.createElement('div');
+                    noMessages.className = 'no-messages';
+                    noMessages.innerHTML = '<p>Нет сообщений. Начните общение!</p>';
+                    messagesContainer.appendChild(noMessages);
+                } else {
+                    welcomeMessage.style.display = 'block';
+                }
+            } else {
+                // Скрываем welcome message если есть сообщения
+                if (welcomeMessage) {
+                    welcomeMessage.style.display = 'none';
+                }
+                
+                // Добавляем новые сообщения
+                messages.forEach(message => {
+                    const messageElement = document.createElement('div');
+                    const isOutgoing = message.sender_id == currentUser.id;
+                    
+                    messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+                    const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    messageElement.innerHTML = `
+                        <div class="message-text">${escapeHtml(message.message_text)}</div>
+                        <div class="message-time">${messageTime}</div>
+                    `;
+                    
+                    messagesContainer.appendChild(messageElement);
+                });
+            }
+            
+            // Возвращаем input-area обратно в контейнер
+            if (inputArea) {
+                messagesContainer.appendChild(inputArea);
+            }
             
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
@@ -3470,6 +3530,7 @@
     </script>
 </body>
 </html>
+
 
 
 
