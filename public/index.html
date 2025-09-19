@@ -163,11 +163,13 @@
             background: rgba(18, 21, 56, 0.5);
             border-bottom: 1px solid rgba(101, 78, 163, 0.3);
             min-width: 280px;
+            position: relative;
         }
+                
         
         .search-box {
             width: 100%;
-            padding: 14px 20px;
+            padding: 14px 20px 14px 45px;
             border-radius: 12px;
             border: none;
             background: rgba(13, 15, 35, 0.7);
@@ -176,7 +178,6 @@
             color: #fff;
             border: 1px solid rgba(101, 78, 163, 0.3);
             opacity: 0;
-            transition: opacity 0.3s ease;
         }
         
         .search-box:focus {
@@ -188,6 +189,51 @@
         .search-box::placeholder {
             color: #5a5a8c;
         }
+
+        
+        .search-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            color: #5a5a8c;
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+
+        .collapsed-search-icon {
+            position: absolute;
+            top: 85px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            background: rgba(101, 78, 163, 0.3);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #a594fe;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 5;
+        }
+        
+        .contacts-sidebar:not(:hover) .collapsed-search-icon {
+            opacity: 1;
+        }
+        
+        .collapsed-search-icon:hover {
+            background: rgba(101, 78, 163, 0.5);
+            color: #7a64ff;
+            transform: translateX(-50%) scale(1.1);
+        }
+        
         
         .contacts-sidebar:hover .search-box {
             opacity: 1;
@@ -207,9 +253,9 @@
             transition: all 0.3s ease;
             border-bottom: 1px solid rgba(101, 78, 163, 0.1);
             min-width: 280px;
-            opacity: 0;
-            transform: translateX(-20px);
-            transition: all 0.4s ease;
+            /* Убираем анимацию непрозрачности */
+            opacity: 1;
+            transform: translateX(0);
         }
         
         .contacts-sidebar:hover .contact-item {
@@ -245,12 +291,15 @@
             border: 2px solid #7a64ff;
             box-shadow: 0 5px 15px rgba(122, 100, 255, 0.3);
             transition: all 0.3s ease;
+            /* Всегда видим */
+            opacity: 1 !important;
+            transform: none !important;
         }
         
         .contacts-sidebar:hover .contact-avatar {
-            margin-right: 15px;
             width: 52px;
             height: 52px;
+            margin-right: 15px;
         }
         
         .contact-info {
@@ -1399,6 +1448,17 @@
             100% { transform: rotate(360deg); }
         }
 
+        @media (max-width: 768px) {
+            .collapsed-search-icon {
+                opacity: 1;
+                top: 75px;
+            }
+            
+            .contacts-sidebar.mobile-expanded .collapsed-search-icon {
+                opacity: 0;
+            }
+        }
+
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -1555,13 +1615,20 @@
                 </div>
                 
                 <div class="search-container">
-                    <input type="text" class="search-box" placeholder="Поиск..." id="contact-search">
+                    <div class="search-input-wrapper">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" class="search-box" placeholder="Поиск..." id="contact-search">
+                    </div>
                 </div>
                 
                 <!-- Индикатор при свёрнутом состоянии -->
                 <div class="sidebar-collapsed-indicator">
                     <i class="fas fa-comments"></i>
                     <span>Чаты</span>
+                </div>
+
+                <div class="collapsed-search-icon">
+                    <i class="fas fa-search"></i>
                 </div>
                 
                 <div class="contacts-list" id="contacts-list">
@@ -1858,7 +1925,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded, initializing...');
             checkAuthStatus();
-            setupEventListeners();
+            Listeners();
         });
         
         // ===== WEBRTC ИНИЦИАЛИЗАЦИЯ =====
@@ -3392,6 +3459,16 @@
                 }
             });
 
+            document.querySelector('.collapsed-search-icon').addEventListener('click', function() {
+                const sidebar = document.querySelector('.contacts-sidebar');
+                sidebar.classList.add('mobile-expanded');
+                
+                // Фокусируемся на поле поиска
+                setTimeout(() => {
+                    document.getElementById('contact-search').focus();
+                }, 300);
+            });
+
               // Обработчик для мобильных устройств
             const contactsSidebar = document.querySelector('.contacts-sidebar');
             if (window.innerWidth <= 768) {
@@ -3530,6 +3607,7 @@
     </script>
 </body>
 </html>
+
 
 
 
