@@ -2452,9 +2452,14 @@
                 return;
             }
         
+            if (isRecording) {
+                console.log('Запись уже идет');
+                return;
+            }
+        
             try {
                 // Запрашиваем доступ к микрофону
-                const stream = await navigator.mediaDevices.getUserMedia({ 
+                audioStream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
@@ -2463,7 +2468,7 @@
                 });
         
                 // Создаем медиа-рекордер
-                mediaRecorder = new MediaRecorder(stream, {
+                mediaRecorder = new MediaRecorder(audioStream, {
                     mimeType: 'audio/webm;codecs=opus'
                 });
         
@@ -2477,10 +2482,10 @@
                 };
         
                 // Запускаем визуализатор
-                setupAudioVisualizer(stream);
+                setupAudioVisualizer(audioStream);
         
                 // Запускаем запись
-                mediaRecorder.start(100); // Записываем chunks по 100ms
+                mediaRecorder.start(100);
                 
                 // Обновляем UI
                 document.getElementById('voice-message-btn').classList.add('recording');
@@ -2489,12 +2494,7 @@
                 // Запускаем таймер
                 startRecordingTimer();
                 
-                // Обработчик завершения записи
-                mediaRecorder.onstop = () => {
-                    stopRecordingTimer();
-                    stopAudioVisualizer();
-                    stream.getTracks().forEach(track => track.stop());
-                };
+                isRecording = true;
         
             } catch (error) {
                 console.error('Ошибка записи:', error);
@@ -2505,9 +2505,8 @@
         function stopVoiceRecording() {
             if (mediaRecorder && mediaRecorder.state === 'recording') {
                 mediaRecorder.stop();
-                document.getElementById('voice-message-btn').classList.remove('recording');
-                document.getElementById('voice-recorder').classList.remove('active');
             }
+            stopRecordingAndCleanup();
         }
         
         function cancelRecording() {
@@ -2533,14 +2532,11 @@
                     body: formData
                 });
         
-                const responseText = await response.text();
-                let responseData;
-                
-                try {
-                    responseData = JSON.parse(responseText);
-                } catch (e) {
-                    throw new Error('Invalid JSON response: ' + responseText);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+        
+                const responseData = await response.json();
         
                 if (responseData.success) {
                     showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
@@ -2552,14 +2548,13 @@
         
             } catch (error) {
                 console.error('Ошибка отправки голосового сообщения:', error);
-                showNotification('Ошибка', 'Ошибка при отправке', 'error');
+                showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
             } finally {
-                setTimeout(() => {
-                    isSending = false;
-                    audioChunks = [];
-                }, 1000);
+                isSending = false;
+                audioChunks = [];
             }
         }
+        
         function stopRecordingAndCleanup() {
             // Останавливаем медиарекордер
             if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -2609,15 +2604,14 @@
         
         function setupAudioVisualizer(stream) {
             try {
-                // Используем правильное создание AudioContext
-                recordingAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-                recordingAnalyser = recordingAudioContext.createAnalyser();
-                const source = recordingAudioContext.createMediaStreamSource(stream);
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
                 
-                source.connect(recordingAnalyser);
-                recordingAnalyser.fftSize = 256;
+                source.connect(analyser);
+                analyser.fftSize = 256;
                 
-                const bufferLength = recordingAnalyser.frequencyBinCount;
+                const bufferLength = analyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
                 const visualizer = document.getElementById('recording-visualizer');
                 
@@ -2635,7 +2629,7 @@
                 const bars = visualizer.querySelectorAll('.visualizer-bar');
                 
                 visualizerInterval = setInterval(() => {
-                    recordingAnalyser.getByteFrequencyData(dataArray);
+                    analyser.getByteFrequencyData(dataArray);
                     
                     // Обновляем высоту баров
                     bars.forEach((bar, index) => {
@@ -4388,37 +4382,98 @@
                 console.log('Обработчики уже настроены');
                 return;
             }
-            
-            console.log('Настраиваем обработчики событий...');
-            
-            // Используем делегирование событий вместо прямых обработчиков
+        
+            console.log('Настройка обработчиков событий...');
+        
+            // Полностью очищаем все старые обработчики
+            const elementsToReset = [
+                'send-btn',
+                'voice-message-btn', 
+                'message-input',
+                'cancel-recording',
+                'send-recording',
+                'call-btn',
+                'end-call-btn',
+                'mute-btn',
+                'accept-call',
+                'reject-call'
+            ];
+        
+            elementsToReset.forEach(id => {
+                const element = document.getElementById(id);
+                if (element && element.parentNode) {
+                    const clone = element.cloneNode(true);
+                    element.parentNode.replaceChild(clone, element);
+                }
+            });
+        
+            // Делегирование событий для надежности
             document.addEventListener('click', function(e) {
                 // Голосовое сообщение
                 if (e.target.closest('#voice-message-btn')) {
+                    e.preventDefault();
                     handleVoiceMessage(e);
                     return;
                 }
-                
+        
                 // Отправка текстового сообщения
                 if (e.target.closest('#send-btn')) {
+                    e.preventDefault();
                     sendMessage();
                     return;
                 }
-                
+        
                 // Отмена записи
                 if (e.target.closest('#cancel-recording')) {
+                    e.preventDefault();
                     cancelRecording();
                     return;
                 }
-                
+        
                 // Отправка голосового сообщения
                 if (e.target.closest('#send-recording')) {
+                    e.preventDefault();
                     sendVoiceMessage();
                     return;
                 }
+        
+                // Звонок
+                if (e.target.closest('#call-btn')) {
+                    e.preventDefault();
+                    startCall();
+                    return;
+                }
+        
+                // Завершение звонка
+                if (e.target.closest('#end-call-btn')) {
+                    e.preventDefault();
+                    endCall();
+                    return;
+                }
+        
+                // Отключение микрофона
+                if (e.target.closest('#mute-btn')) {
+                    e.preventDefault();
+                    toggleMute();
+                    return;
+                }
+        
+                // Принятие звонка
+                if (e.target.closest('#accept-call')) {
+                    e.preventDefault();
+                    acceptCall();
+                    return;
+                }
+        
+                // Отклонение звонка
+                if (e.target.closest('#reject-call')) {
+                    e.preventDefault();
+                    rejectCall();
+                    return;
+                }
             });
-            
-            // Обработчик клавиатуры
+        
+            // Обработчик клавиатуры для поля ввода
             const messageInput = document.getElementById('message-input');
             if (messageInput) {
                 messageInput.addEventListener('keypress', function(e) {
@@ -4427,11 +4482,45 @@
                         sendMessage();
                     }
                 });
+        
+                // Автоматическое изменение высоты
+                messageInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
             }
-            
+        
+            // Обработчики для аутентификации
+            document.getElementById('login-btn')?.addEventListener('click', handleLogin);
+            document.getElementById('register-btn')?.addEventListener('click', handleRegister);
+            document.getElementById('show-register')?.addEventListener('click', showRegisterForm);
+            document.getElementById('show-login')?.addEventListener('click', showLoginForm);
+            document.getElementById('profile-btn')?.addEventListener('click', showProfileSettings);
+            document.getElementById('logout-btn')?.addEventListener('click', logoutUser);
+            document.getElementById('profile-cancel')?.addEventListener('click', hideProfileSettings);
+            document.getElementById('profile-save')?.addEventListener('click', saveProfileSettings);
+            document.getElementById('close-notification')?.addEventListener('click', hideNotification);
+            document.getElementById('close-search-modal')?.addEventListener('click', closeSearchModal);
+        
+            // Обработчики для поиска
+            document.getElementById('contact-search')?.addEventListener('input', function(e) {
+                const searchTerm = e.target.value.toLowerCase();
+                const contactItems = document.querySelectorAll('.contact-item');
+                
+                contactItems.forEach(item => {
+                    const contactName = item.querySelector('.contact-name')?.textContent.toLowerCase();
+                    if (contactName && contactName.includes(searchTerm)) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            });
+        
             eventListenersInitialized = true;
-            console.log('Обработчики событий настроены');
+            console.log('Все обработчики событий настроены');
         }
+
         
         function escapeHtml(text) {
             const div = document.createElement('div');
@@ -4440,21 +4529,16 @@
         }
         
         function handleVoiceMessage(event) {
-            // Используем event.target для надежности
-            const btn = event.target.closest('#voice-message-btn') || document.getElementById('voice-message-btn');
+            const btn = event.target.closest('#voice-message-btn');
             
             if (!btn) {
                 console.error('Кнопка голосового сообщения не найдена');
                 return;
             }
-            
-            console.log('Кнопка найдена, классы:', btn.classList.toString());
-            
+        
             if (btn.classList.contains('recording')) {
-                console.log('Останавливаем запись');
                 stopVoiceRecording();
             } else {
-                console.log('Начинаем запись');
                 startVoiceRecording();
             }
         }
@@ -4541,9 +4625,15 @@
         
         // Проверяем разрешения при загрузке
         setTimeout(checkAudioPermissions, 1000);
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing...');
+            checkAuthStatus();
+            setupEventListeners();
+        });
     </script>
 </body>
 </html>
+
 
 
 
