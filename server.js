@@ -378,8 +378,7 @@ app.post('/api/send-voice-message', upload.single('audio'), async (req, res) => 
         }
 
         // Создаем URL для доступа к файлу
-        const audioUrl = `/uploads/audio/${audioFile.filename}`;
-
+        const audioUrl = `https://${req.get('host')}/uploads/audio/${audioFile.filename}`;
         // Сохраняем в базу данных
         db.run(
             `INSERT INTO messages (sender_id, receiver_id, audio_url, duration, message_type) 
@@ -762,6 +761,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
