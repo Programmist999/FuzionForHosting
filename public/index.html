@@ -3135,8 +3135,9 @@
             if (element && element.parentNode) {
                 const clone = element.cloneNode(true);
                 element.parentNode.replaceChild(clone, element);
-                console.log('Element replaced:', elementId);
+                return clone;
             }
+            return null;
         }
         
         function checkConnectionStatus() {
@@ -4383,21 +4384,18 @@
         
         // Убираем старый код и используем простые обработчики
         function setupEventListeners() {
-            if (eventListenersInitialized) {
-                console.log('Event listeners already initialized');
-                return;
-            }
-        
-            // Заменяем элементы чтобы сбросить обработчики
+            if (eventListenersInitialized) return;
+            
+            // Удаляем старые обработчики путем замены элементов
             replaceElementWithClone('send-btn');
             replaceElementWithClone('voice-message-btn');
             replaceElementWithClone('message-input');
             replaceElementWithClone('cancel-recording');
             replaceElementWithClone('send-recording');
         
-            // Добавляем обработчики напрямую на новые элементы
+            // Добавляем обработчики на новые элементы
             document.getElementById('send-btn')?.addEventListener('click', sendMessage);
-            document.getElementById('voice-message-btn')?.addEventListener('click', handleVoiceMessage);
+            document.getElementById('voice-message-btn')?.addEventListener('click', handleVoiceMessage); // ← Просто передаем функцию
             document.getElementById('cancel-recording')?.addEventListener('click', cancelRecording);
             document.getElementById('send-recording')?.addEventListener('click', sendVoiceMessage);
             
@@ -4412,7 +4410,6 @@
             eventListenersInitialized = true;
             console.log('Event listeners initialized');
         }
-
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -4420,11 +4417,11 @@
         }
         
         function handleVoiceMessage() {
-            // Получаем кнопку явно, а не через this
+            // Явно находим кнопку, а не используем this
             const btn = document.getElementById('voice-message-btn');
             
             if (!btn) {
-                console.error('Voice message button not found');
+                console.error('Кнопка голосового сообщения не найдена');
                 return;
             }
             
@@ -4520,6 +4517,7 @@
     </script>
 </body>
 </html>
+
 
 
 
