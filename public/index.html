@@ -2403,6 +2403,21 @@
             }
         }
 
+        function createTextMessageElement(message) {
+            const messageElement = document.createElement('div');
+            const isOutgoing = message.sender_id == currentUser.id;
+            
+            messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+            const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            messageElement.innerHTML = `
+                <div class="message-text">${escapeHtml(message.message_text)}</div>
+                <div class="message-time">${messageTime}</div>
+            `;
+            
+            return messageElement;
+        }
+
         function stopAllVoiceMessages() {
             if (currentPlayingAudio) {
                 currentPlayingAudio.pause();
@@ -3695,43 +3710,6 @@
         //     messagesContainer.scrollTop = messagesContainer.scrollHeight;
         // }
 
-        function renderMessages(messages) {
-            const messagesContainer = document.getElementById('messages-container');
-            
-            // Сохраняем только input-area
-            const inputArea = messagesContainer.querySelector('.input-area');
-            
-            // Создаем временный контейнер
-            const tempContainer = document.createElement('div');
-            
-            // Добавляем сообщения во временный контейнер
-            messages.forEach(message => {
-                if (message.audio_url) {
-                    const voiceMessageElement = createVoiceMessageElement(message);
-                    tempContainer.appendChild(voiceMessageElement);
-                } else {
-                    const textMessageElement = createTextMessageElement(message);
-                    tempContainer.appendChild(textMessageElement);
-                }
-            });
-            
-            // Полностью очищаем основной контейнер
-            messagesContainer.innerHTML = '';
-            
-            // Добавляем сообщения обратно
-            while (tempContainer.firstChild) {
-                messagesContainer.appendChild(tempContainer.firstChild);
-            }
-            
-            // Возвращаем input-area
-            if (inputArea) {
-                messagesContainer.appendChild(inputArea);
-            }
-            
-            // Прокручиваем вниз
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
         function createVoiceMessageElement(message) {
             const messageElement = document.createElement('div');
             const isOutgoing = message.sender_id == currentUser.id;
@@ -3761,6 +3739,57 @@
             return messageElement;
         }
 
+        function renderMessages(messages) {
+            const messagesContainer = document.getElementById('messages-container');
+            if (!messagesContainer) return;
+            
+            // Сохраняем input-area перед очисткой
+            const inputArea = messagesContainer.querySelector('.input-area');
+            
+            // Временно удаляем input-area
+            if (inputArea) {
+                inputArea.remove();
+            }
+            
+            // Очищаем только сообщения
+            const messageElements = messagesContainer.querySelectorAll('.message, .no-messages');
+            messageElements.forEach(element => {
+                element.remove();
+            });
+            
+            // Скрываем welcome message если есть сообщения
+            const welcomeMessage = document.getElementById('welcome-message');
+            if (welcomeMessage && messages && messages.length > 0) {
+                welcomeMessage.style.display = 'none';
+            }
+            
+            if (!messages || messages.length === 0) {
+                const noMessages = document.createElement('div');
+                noMessages.className = 'no-messages';
+                noMessages.innerHTML = '<p>Нет сообщений. Начните общение!</p>';
+                messagesContainer.appendChild(noMessages);
+                return;
+            }
+            
+            // Добавляем сообщения
+            messages.forEach(message => {
+                if (message.audio_url) {
+                    const voiceMessageElement = createVoiceMessageElement(message);
+                    messagesContainer.appendChild(voiceMessageElement);
+                } else {
+                    const textMessageElement = createTextMessageElement(message);
+                    messagesContainer.appendChild(textMessageElement);
+                }
+            });
+            
+            // Возвращаем input-area обратно
+            if (inputArea) {
+                messagesContainer.appendChild(inputArea);
+            }
+            
+            // Прокручиваем вниз
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
         
         function generateVoiceWaveform(element, message) {
             const waveform = element.querySelector('.voice-waveform');
@@ -4376,9 +4405,20 @@
             eventListenersInitialized = true;
             console.log('Event listeners initialized');
         }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
         
         function handleVoiceMessage() {
             const btn = document.getElementById('voice-message-btn');
+            if (!btn) {
+                console.error('Voice message button not found');
+                return;
+            }
+            
             if (btn.classList.contains('recording')) {
                 stopVoiceRecording();
             } else {
@@ -4471,3 +4511,4 @@
     </script>
 </body>
 </html>
+
