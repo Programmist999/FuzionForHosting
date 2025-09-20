@@ -1316,6 +1316,107 @@
             opacity: 0.5;
         }
 
+        .voice-message-container {
+            display: flex;
+            align-items: center;
+            padding: 12px 18px;
+            border-radius: 20px;
+            background: rgba(38, 41, 85, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(101, 78, 163, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 200px;
+            max-width: 300px;
+        }
+
+        .voice-message-container:hover {
+            background: rgba(38, 41, 85, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(122, 100, 255, 0.2);
+        }
+
+        .voice-waveform {
+            flex: 1;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            margin: 0 12px;
+        }
+        
+        .wave-bar {
+            width: 3px;
+            background: rgba(122, 100, 255, 0.6);
+            border-radius: 1.5px;
+            transition: all 0.3s ease;
+        }
+        
+        .wave-bar.active {
+            background: linear-gradient(180deg, #7a64ff 0%, #c850c0 100%);
+        }
+
+        .voice-duration {
+            font-size: 12px;
+            color: #a594fe;
+            font-weight: 600;
+            min-width: 40px;
+            text-align: right;
+        }
+        
+        .voice-duration.playing {
+            color: #ff3366;
+        }
+        
+        /* Прогресс-бар */
+        .voice-progress {
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #7a64ff 0%, #c850c0 100%);
+            border-radius: 0 0 20px 20px;
+            transition: width 0.1s linear;
+        }
+        
+        /* Для исходящих сообщений */
+        .message-outgoing .voice-message-container {
+            background: linear-gradient(135deg, 
+                rgba(122, 100, 255, 0.3) 0%, 
+                rgba(200, 80, 192, 0.3) 100%);
+            border: 1px solid rgba(122, 100, 255, 0.4);
+        }
+        
+        .message-outgoing .voice-play-btn {
+            background: linear-gradient(135deg, #7a64ff 0%, #c850c0 100%);
+        }
+        
+        /* Кнопка воспроизведения */
+        .voice-play-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #7a64ff 0%, #c850c0 100%);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+        
+        .voice-play-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(122, 100, 255, 0.4);
+        }
+        
+        .voice-play-btn.playing {
+            background: linear-gradient(135deg, #ff3366 0%, #ff7733 100%);
+        }
+
         .voice-message-btn {
             background: rgba(101, 78, 163, 0.2);
             border: 1px solid rgba(101, 78, 163, 0.4);
@@ -1453,19 +1554,23 @@
         }
         
         .recording-visualizer {
-            height: 40px;
-            margin-top: 20px;
+            height: 50px; /* Увеличиваем высоту */
+            margin-top: 25px;
             display: flex;
             align-items: flex-end;
-            gap: 2px;
+            gap: 3px; /* Увеличиваем расстояние между полосками */
             justify-content: center;
+            background: rgba(13, 15, 35, 0.3);
+            border-radius: 10px;
+            padding: 10px;
         }
         
         .visualizer-bar {
-            width: 4px;
+            width: 6px; /* Шире полоски */
             background: linear-gradient(180deg, #7a64ff 0%, #c850c0 100%);
-            border-radius: 2px;
+            border-radius: 3px;
             transition: height 0.1s ease;
+            min-height: 2px;
         }
         
         /* Стили для голосовых сообщений в чате */
@@ -1513,17 +1618,22 @@
         
         .voice-message-waveform {
             flex: 1;
-            height: 30px;
+            height: 40px; /* Выше */
             display: flex;
             align-items: center;
-            gap: 2px;
+            gap: 3px; /* Больше расстояния */
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 0 10px;
         }
         
         .waveform-bar {
-            width: 3px;
-            background: rgba(122, 100, 255, 0.6);
-            border-radius: 1.5px;
+            width: 4px; /* Шире */
+            background: rgba(122, 100, 255, 0.4);
+            border-radius: 2px;
             transition: height 0.3s ease;
+            min-height: 3px;
         }
         
         .waveform-bar.active {
@@ -1647,6 +1757,34 @@
             100% {
                 transform: scale(1.1);
                 opacity: 0;
+            }
+        }
+
+        @keyframes wave {
+            0%, 100% {
+                transform: scaleY(1);
+                opacity: 0.7;
+            }
+            50% {
+                transform: scaleY(1.8);
+                opacity: 1;
+            }
+        }
+        
+        .wave-bar.animated {
+            animation: wave 1.2s ease-in-out infinite;
+        }
+        
+        /* Адаптация для мобильных */
+        @media (max-width: 768px) {
+            .voice-message-container {
+                max-width: 250px;
+                padding: 10px 15px;
+            }
+            
+            .voice-play-btn {
+                width: 32px;
+                height: 32px;
             }
         }
 
@@ -2104,6 +2242,8 @@
         let recordingAudioContext = null;
         let recordingAnalyser = null;
         let visualizerInterval = null;
+        let currentPlayingAudio = null;
+        let currentPlayingElement = null;
         
         // WebRTC переменные
         let peerConnection = null;
@@ -2258,6 +2398,34 @@
             }
         }
 
+        function stopAllVoiceMessages() {
+            if (currentPlayingAudio) {
+                currentPlayingAudio.pause();
+                currentPlayingAudio = null;
+            }
+            
+            if (currentPlayingElement) {
+                const playBtn = currentPlayingElement.querySelector('.voice-play-btn');
+                const durationEl = currentPlayingElement.querySelector('.voice-duration');
+                const progressBar = currentPlayingElement.querySelector('.voice-progress');
+                const waveBars = currentPlayingElement.querySelectorAll('.wave-bar');
+                
+                if (playBtn) {
+                    playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    playBtn.classList.remove('playing');
+                }
+                if (durationEl) durationEl.classList.remove('playing');
+                if (progressBar) progressBar.style.width = '0%';
+                if (waveBars) {
+                    waveBars.forEach(bar => {
+                        bar.classList.remove('animated', 'active');
+                    });
+                }
+                
+                currentPlayingElement = null;
+            }
+        }
+
         async function startVoiceRecording() {
             if (!currentUser || !currentContact) {
                 showNotification('Ошибка', 'Выберите чат для отправки голосового сообщения', 'error');
@@ -2349,6 +2517,15 @@
                     method: 'POST',
                     body: formData
                 });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
+                    await loadMessages(); // Обновляем чат
+                } else {
+                    showNotification('Ошибка', data.error || 'Не удалось отправить голосовое сообщение', 'error');
+                }
         
                 const data = await response.json();
         
@@ -3416,12 +3593,11 @@
 
             // В цикле добавления сообщений добавьте обработку голосовых сообщений
             messages.forEach(message => {
-                if (message.type === 'voice') {
-                    // Создаем элемент голосового сообщения
+                if (message.audio_url) {
                     const voiceMessageElement = createVoiceMessageElement(message);
                     messagesContainer.appendChild(voiceMessageElement);
                 } else {
-                    // Обычное текстовое сообщение (ваш существующий код)
+                    // Обычное текстовое сообщение
                     const messageElement = document.createElement('div');
                     const isOutgoing = message.sender_id == currentUser.id;
                     
@@ -3490,39 +3666,70 @@
             messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
             
             messageElement.innerHTML = `
-                <div class="voice-message">
-                    <div class="voice-message-play-btn">
+                <div class="voice-message-container" data-audio-url="${message.audio_url}">
+                    <button class="voice-play-btn">
                         <i class="fas fa-play"></i>
+                    </button>
+                    <div class="voice-waveform">
+                        <!-- Waveform будет сгенерирован динамически -->
                     </div>
-                    <div class="voice-message-waveform" id="waveform-${message.id}">
-                        <!-- waveform будет генерироваться динамически -->
-                    </div>
-                    <div class="voice-message-duration">${message.duration}s</div>
+                    <div class="voice-duration">${message.duration || '0'}"</div>
+                    <div class="voice-progress" style="width: 0%"></div>
                 </div>
                 <div class="message-time">${new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
             `;
             
             // Генерируем waveform
-            generateWaveform(messageElement, message);
+            generateVoiceWaveform(messageElement, message);
             
             // Добавляем обработчик воспроизведения
-            const playBtn = messageElement.querySelector('.voice-message-play-btn');
-            playBtn.addEventListener('click', () => playVoiceMessage(message.audio_url));
+            setupVoiceMessagePlayback(messageElement, message);
             
             return messageElement;
         }
+
         
-        function generateWaveform(element, message) {
-            const waveform = element.querySelector('.voice-message-waveform');
+        function generateVoiceWaveform(element, message) {
+            const waveform = element.querySelector('.voice-waveform');
             waveform.innerHTML = '';
             
-            // Простая генерация waveform (можно улучшить)
-            for (let i = 0; i < 20; i++) {
+            const barCount = 25;
+            const duration = message.duration || 10;
+            
+            for (let i = 0; i < barCount; i++) {
                 const bar = document.createElement('div');
-                bar.className = 'waveform-bar';
-                bar.style.height = (Math.random() * 25 + 5) + 'px'; // Случайная высота
+                bar.className = 'wave-bar';
+                
+                // Создаем красивый waveform паттерн
+                const height = Math.sin(i / 2.5) * 12 + 15;
+                bar.style.height = height + 'px';
+                
+                // Добавляем задержку для анимации
+                bar.style.animationDelay = `${i * 0.05}s`;
+                
                 waveform.appendChild(bar);
             }
+        }
+
+        function animateWaveform(waveformElement) {
+            const bars = waveformElement.querySelectorAll('.waveform-bar');
+            const animationDuration = 2000; // 2 секунды
+            
+            bars.forEach((bar, index) => {
+                // Создаем волнообразную анимацию
+                const delay = (index / bars.length) * animationDuration;
+                
+                setInterval(() => {
+                    const randomHeight = Math.random() * 30 + 5;
+                    bar.style.height = randomHeight + 'px';
+                    
+                    // Мигающий эффект
+                    if (Math.random() > 0.7) {
+                        bar.classList.add('active');
+                        setTimeout(() => bar.classList.remove('active'), 200);
+                    }
+                }, delay);
+            });
         }
         
         async function playVoiceMessage(audioUrl) {
@@ -3534,6 +3741,112 @@
             }
         }
 
+        function setupVoiceMessagePlayback(element, message) {
+            const container = element.querySelector('.voice-message-container');
+            const playBtn = element.querySelector('.voice-play-btn');
+            const durationEl = element.querySelector('.voice-duration');
+            const progressBar = element.querySelector('.voice-progress');
+            const waveBars = element.querySelectorAll('.wave-bar');
+            
+            let audio = null;
+            let isPlaying = false;
+            
+            container.addEventListener('click', async function(e) {
+                if (e.target.closest('.voice-play-btn')) {
+                    e.stopPropagation();
+                    
+                    if (isPlaying) {
+                        stopPlayback();
+                    } else {
+                        await startPlayback();
+                    }
+                }
+            });
+            
+            async function startPlayback() {
+                try {
+                    stopAllVoiceMessages();
+                    if (!audio) {
+                        audio = new Audio(message.audio_url);
+                        currentPlayingAudio = audio;
+                        currentPlayingElement = element;
+                        
+                        audio.addEventListener('timeupdate', function() {
+                            const progress = (audio.currentTime / audio.duration) * 100;
+                            progressBar.style.width = progress + '%';
+                            
+                            // Анимируем волны в соответствии с воспроизведением
+                            animateWaveform(audio.currentTime, audio.duration);
+                        });
+                        
+                        audio.addEventListener('ended', function() {
+                            stopPlayback();
+                            resetPlayback();
+                        });
+                        
+                        audio.addEventListener('error', function() {
+                            showNotification('Ошибка', 'Не удалось воспроизвести голосовое сообщение', 'error');
+                            stopPlayback();
+                        });
+                    }
+                    
+                    await audio.play();
+                    isPlaying = true;
+                    playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                    playBtn.classList.add('playing');
+                    durationEl.classList.add('playing');
+                    
+                    // Запускаем анимацию волн
+                    waveBars.forEach(bar => bar.classList.add('animated'));
+                    
+                } catch (error) {
+                    console.error('Ошибка воспроизведения:', error);
+                    showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
+                }
+            }
+            
+            function stopPlayback() {
+                if (audio) {
+                    audio.pause();
+                }
+                isPlaying = false;
+                playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                playBtn.classList.remove('playing');
+                durationEl.classList.remove('playing');
+                
+                // Останавливаем анимацию волн
+                waveBars.forEach(bar => bar.classList.remove('animated'));
+            }
+            
+            function resetPlayback() {
+                progressBar.style.width = '0%';
+                waveBars.forEach(bar => {
+                    bar.style.transform = 'scaleY(1)';
+                    bar.style.opacity = '0.7';
+                });
+            }
+            
+            function animateWaveform(currentTime, duration) {
+                const progress = currentTime / duration;
+                const activeBars = Math.floor(progress * waveBars.length);
+                
+                waveBars.forEach((bar, index) => {
+                    if (index <= activeBars) {
+                        bar.classList.add('active');
+                    } else {
+                        bar.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Очистка при удалении элемента
+            element.addEventListener('DOMNodeRemoved', function() {
+                if (audio) {
+                    audio.pause();
+                    audio = null;
+                }
+            });
+        }
         
         async function sendMessage() {
             if (!currentUser || !currentContact) return;
@@ -4064,6 +4377,7 @@
     </script>
 </body>
 </html>
+
 
 
 
