@@ -3114,6 +3114,15 @@
             
             showNotification('Звонок', 'Звонок завершен', 'info');
         }
+
+        function replaceElementWithClone(elementId) {
+            const element = document.getElementById(elementId);
+            if (element && element.parentNode) {
+                const clone = element.cloneNode(true);
+                element.parentNode.replaceChild(clone, element);
+                console.log('Element replaced:', elementId);
+            }
+        }
         
         function checkConnectionStatus() {
             if (!isCallActive) return;
@@ -4338,16 +4347,19 @@
         
         // Убираем старый код и используем простые обработчики
         function setupEventListeners() {
-            if (eventListenersInitialized) return;
-            
-            // Удаляем старые элементы
+            if (eventListenersInitialized) {
+                console.log('Event listeners already initialized');
+                return;
+            }
+        
+            // Заменяем элементы чтобы сбросить обработчики
             replaceElementWithClone('send-btn');
             replaceElementWithClone('voice-message-btn');
             replaceElementWithClone('message-input');
             replaceElementWithClone('cancel-recording');
             replaceElementWithClone('send-recording');
         
-            // Добавляем обработчики напрямую
+            // Добавляем обработчики напрямую на новые элементы
             document.getElementById('send-btn')?.addEventListener('click', sendMessage);
             document.getElementById('voice-message-btn')?.addEventListener('click', handleVoiceMessage);
             document.getElementById('cancel-recording')?.addEventListener('click', cancelRecording);
@@ -4362,6 +4374,7 @@
             });
         
             eventListenersInitialized = true;
+            console.log('Event listeners initialized');
         }
         
         function handleVoiceMessage() {
@@ -4458,6 +4471,7 @@
     </script>
 </body>
 </html>
+
 
 
 
