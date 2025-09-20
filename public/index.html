@@ -2527,13 +2527,13 @@
                     showNotification('Ошибка', data.error || 'Не удалось отправить голосовое сообщение', 'error');
                 }
         
-                const data = await response.json();
-        
-                if (data.success) {
+                const responseData = await response.json(); // Переименовываем переменную
+
+                if (responseData.success) {
                     showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
-                    await loadMessages(); // Обновляем чат
+                    await loadMessages();
                 } else {
-                    showNotification('Ошибка', 'Не удалось отправить голосовое сообщение', 'error');
+                    showNotification('Ошибка', responseData.error || 'Не удалось отправить голосовое сообщение', 'error');
                 }
         
             } catch (error) {
@@ -4377,6 +4377,7 @@
     </script>
 </body>
 </html>
+
 
 
 
