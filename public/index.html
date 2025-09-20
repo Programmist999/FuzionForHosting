@@ -2643,6 +2643,89 @@
                     this.style.height = (this.scrollHeight) + 'px';
                 });
             }
+
+            function updateUserProfile(name, avatar) {
+                if (!currentUser) return;
+                
+                // Обновляем UI сразу
+                const profileAvatar = document.getElementById('profile-avatar-img');
+                if (profileAvatar && avatar) {
+                    profileAvatar.src = avatar;
+                }
+                
+                // Сохраняем в localStorage для мгновенного отображения
+                currentUser.avatar = avatar;
+                currentUser.name = name || currentUser.name;
+                localStorage.setItem('fuzionprime_current_user', JSON.stringify(currentUser));
+                
+                // Отправляем на сервер (асинхронно)
+                sendProfileUpdateToServer(name, avatar);
+            }
+            
+            async function sendProfileUpdateToServer(name, avatar) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/update-profile`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            userId: currentUser.id,
+                            name: name,
+                            avatar: avatar
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        console.log('Профиль обновлен на сервере');
+                    } else {
+                        console.error('Ошибка обновления профиля на сервере:', data.error);
+                    }
+                } catch (error) {
+                    console.error('Ошибка отправки профиля:', error);
+                }
+            }
+            
+            function removeAvatar() {
+                const defaultAvatar = 'https://via.placeholder.com/150/7a64ff/ffffff?text=' + (currentUser.name || currentUser.username).charAt(0);
+                const profileAvatar = document.getElementById('profile-avatar-img');
+                if (profileAvatar) {
+                    profileAvatar.src = defaultAvatar;
+                }
+                updateUserProfile(currentUser.name, null);
+            }
+
+            function handleAvatarUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                if (!file.type.match('image.*')) {
+                    showNotification('Ошибка', 'Пожалуйста, выберите файл изображения', 'error');
+                    return;
+                }
+                
+                if (file.size > 5 * 1024 * 1024) {
+                    showNotification('Ошибка', 'Размер файла не должен превышать 5MB', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const avatarData = e.target.result;
+                    const profileAvatar = document.getElementById('profile-avatar-img');
+                    if (profileAvatar) {
+                        profileAvatar.src = avatarData;
+                    }
+                    // Сохраняем аватар сразу после выбора
+                    updateUserProfile(currentUser.name, avatarData);
+                };
+                reader.onerror = function() {
+                    showNotification('Ошибка', 'Не удалось загрузить изображение', 'error');
+                };
+                reader.readAsDataURL(file);
+            }
         
             // Обработка hover для сайдбара (для анимаций)
             const contactsSidebar = document.querySelector('.contacts-sidebar');
@@ -3740,6 +3823,7 @@
     </script>
 </body>
 </html>
+
 
 
 
