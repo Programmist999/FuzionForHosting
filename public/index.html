@@ -2496,8 +2496,9 @@
         }
         
         function cancelRecording() {
-            stopVoiceRecording();
+            stopRecordingAndCleanup();
             audioChunks = [];
+            showNotification('Инфо', 'Запись отменена', 'info');
         }
         
         async function sendVoiceMessage() {
@@ -2538,12 +2539,46 @@
                 }
         
             } catch (error) {
-                console.error('Ошибка отправки голосового сообщения:', error);
-                showNotification('Ошибка', 'Ошибка при отправке', 'error');
+                console.error('Ошибка отправки:', error);
             } finally {
+                // Гарантированно останавливаем запись и очищаем
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                }
+                stopAudioVisualizer();
+                stopRecordingTimer();
+                document.getElementById('voice-recorder').classList.remove('active');
+                document.getElementById('voice-message-btn').classList.remove('recording');
+                stopRecordingAndCleanup();
                 isSending = false;
                 audioChunks = [];
             }
+        }
+
+        function stopRecordingAndCleanup() {
+            // Останавливаем медиарекордер
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            
+            // Останавливаем таймер
+            stopRecordingTimer();
+            
+            // Останавливаем визуализатор
+            stopAudioVisualizer();
+            
+            // Закрываем медиапоток
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
+            }
+            
+            // Обновляем UI
+            document.getElementById('voice-recorder').classList.remove('active');
+            document.getElementById('voice-message-btn').classList.remove('recording');
+            
+            // Сбрасываем флаги
+            isRecording = false;
         }
         
         // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
@@ -3805,42 +3840,35 @@
             async function startPlayback() {
                 try {
                     stopAllVoiceMessages();
+                    
                     if (!audio) {
-                        audio = new Audio(message.audio_url);
-                        currentPlayingAudio = audio;
-                        currentPlayingElement = element;
+                        audio = new Audio();
                         
-                        audio.addEventListener('timeupdate', function() {
-                            const progress = (audio.currentTime / audio.duration) * 100;
-                            progressBar.style.width = progress + '%';
-                            
-                            // Анимируем волны в соответствии с воспроизведением
-                            animateWaveform(audio.currentTime, audio.duration);
+                        // Исправляем URL для HTTPS
+                        let audioUrl = message.audio_url;
+                        if (audioUrl.startsWith('http://')) {
+                            audioUrl = audioUrl.replace('http://', 'https://');
+                        }
+                        audio.src = audioUrl;
+                        
+                        audio.addEventListener('loadeddata', function() {
+                            console.log('Audio loaded successfully');
                         });
                         
-                        audio.addEventListener('ended', function() {
-                            stopPlayback();
-                            resetPlayback();
-                        });
-                        
-                        audio.addEventListener('error', function() {
-                            showNotification('Ошибка', 'Не удалось воспроизвести голосовое сообщение', 'error');
+                        audio.addEventListener('error', function(e) {
+                            console.error('Audio error:', e, audio.error);
+                            showNotification('Ошибка', 'Не удалось загрузить аудио', 'error');
                             stopPlayback();
                         });
                     }
-                    
+            
                     await audio.play();
                     isPlaying = true;
-                    playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-                    playBtn.classList.add('playing');
-                    durationEl.classList.add('playing');
-                    
-                    // Запускаем анимацию волн
-                    waveBars.forEach(bar => bar.classList.add('animated'));
-                    
+                    // ... остальной код
+            
                 } catch (error) {
                     console.error('Ошибка воспроизведения:', error);
-                    showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
+                    showNotification('Ошибка', 'Не удалось воспроизвести', 'error');
                 }
             }
             
@@ -4440,6 +4468,7 @@
     </script>
 </body>
 </html>
+
 
 
 
