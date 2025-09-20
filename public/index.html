@@ -2505,8 +2505,8 @@
             if (isSending) return;
             isSending = true;
         
-                const audioBlob = new Blob(audioChunks, { ty
-            try {pe: 'audio/webm;codecs=opus' });
+            try {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'voice-message.webm');
                 formData.append('senderId', currentUser.id);
@@ -2545,7 +2545,6 @@
                 }, 1000);
             }
         }
-
         function stopRecordingAndCleanup() {
             // Останавливаем медиарекордер
             if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -4459,6 +4458,7 @@
     </script>
 </body>
 </html>
+
 
 
 
