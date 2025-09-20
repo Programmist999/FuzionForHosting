@@ -4190,9 +4190,48 @@
         function hideNotification() {
             document.getElementById('notification').classList.remove('active');
         }
+
+        function removeEventListeners() {
+            // Создаем новые элементы (клонируем и заменяем) чтобы сбросить обработчики
+            const sendBtn = document.getElementById('send-btn');
+            const messageInput = document.getElementById('message-input');
+            const voiceBtn = document.getElementById('voice-message-btn');
+            
+            if (sendBtn) {
+                const newSendBtn = sendBtn.cloneNode(true);
+                sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
+            }
+            
+            if (messageInput) {
+                const newMessageInput = messageInput.cloneNode(true);
+                messageInput.parentNode.replaceChild(newMessageInput, messageInput);
+            }
+            
+            if (voiceBtn) {
+                const newVoiceBtn = voiceBtn.cloneNode(true);
+                voiceBtn.parentNode.replaceChild(newVoiceBtn, voiceBtn);
+            }
+        }
+
+        function handleMessageInputKeypress(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function handleVoiceMessageClick() {
+            if (this.classList.contains('recording')) {
+                stopVoiceRecording();
+            } else {
+                startVoiceRecording();
+            }
+        }
         
         // ===== НАСТРОЙКА ОБРАБОТЧИКОВ СОБЫТИЙ =====
         function setupEventListeners() {
+
+            removeEventListeners();
             // Кнопка профиля
             document.getElementById('profile-btn').addEventListener('click', showProfileSettings);
             document.getElementById('logout-btn').addEventListener('click', logoutUser);
@@ -4205,6 +4244,10 @@
             document.getElementById('avatar-upload').addEventListener('click', function() {
                 document.getElementById('avatar-file-input').click();
             });
+
+            document.getElementById('send-btn').addEventListener('click', sendMessage);
+            document.getElementById('message-input').addEventListener('keypress', handleMessageInputKeypress);
+            document.getElementById('voice-message-btn').addEventListener('click', handleVoiceMessageClick);
             document.getElementById('avatar-file-input').addEventListener('change', handleAvatarUpload);
             document.getElementById('remove-avatar-btn').addEventListener('click', removeAvatar);
             
@@ -4377,6 +4420,7 @@
     </script>
 </body>
 </html>
+
 
 
 
