@@ -2501,61 +2501,48 @@
         }
         
         async function sendVoiceMessage() {
-            console.log('sendVoiceMessage called', new Date().toISOString());
-            if (isSending) {
-                console.log('Blocked duplicate sendVoiceMessage');
-                return;
-            }
-            
-            if (isSending) {
-                console.log('Already sending voice, skipping...');
-                return;
-            }
-            
+            if (isSending) return;
             isSending = true;
         
             try {
-                // Создаем Blob из записанных данных
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
-                
-                // Создаем FormData для отправки
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'voice-message.webm');
                 formData.append('senderId', currentUser.id);
                 formData.append('receiverId', currentContact.id);
                 formData.append('duration', Math.floor((Date.now() - recordingStartTime) / 1000));
         
-                // Отправляем на сервер
+                // Важно: сохраняем response до чтения
                 const response = await fetch(`${API_BASE_URL}/api/send-voice-message`, {
                     method: 'POST',
                     body: formData
                 });
+        
+                // Читаем response только ОДИН раз
+                const responseText = await response.text();
+                let responseData;
                 
-                const data = await response.json();
-                
-                if (data.success) {
-                    showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
-                    await loadMessages(); // Обновляем чат
-                } else {
-                    showNotification('Ошибка', data.error || 'Не удалось отправить голосовое сообщение', 'error');
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch (e) {
+                    throw new Error('Invalid JSON response: ' + responseText);
                 }
         
-                const responseData = await response.json(); // Переименовываем переменную
-
                 if (responseData.success) {
                     showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
+                    stopVoiceRecording(); // Добавляем остановку записи
+                    document.getElementById('voice-recorder').classList.remove('active');
                     await loadMessages();
                 } else {
-                    showNotification('Ошибка', responseData.error || 'Не удалось отправить голосовое сообщение', 'error');
+                    showNotification('Ошибка', responseData.error, 'error');
                 }
         
             } catch (error) {
                 console.error('Ошибка отправки голосового сообщения:', error);
-                showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
+                showNotification('Ошибка', 'Ошибка при отправке', 'error');
             } finally {
-                setTimeout(() => {
-                    isSending = false;
-                }, 1000);
+                isSending = false;
+                audioChunks = [];
             }
         }
         
@@ -4330,196 +4317,41 @@
             }
         }
         
-        // ===== НАСТРОЙКА ОБРАБОТЧИКОВ СОБЫТИЙ =====
-        // function setupEventListeners() {
-
-        //     removeEventListeners();
-        //     // Кнопка профиля
-        //     document.getElementById('profile-btn').addEventListener('click', showProfileSettings);
-        //     document.getElementById('logout-btn').addEventListener('click', logoutUser);
-            
-        //     // Кнопки профиля
-        //     document.getElementById('profile-cancel').addEventListener('click', hideProfileSettings);
-        //     document.getElementById('profile-save').addEventListener('click', saveProfileSettings);
-            
-        //     // Загрузка аватара
-        //     document.getElementById('avatar-upload').addEventListener('click', function() {
-        //         document.getElementById('avatar-file-input').click();
-        //     });
-
-        //     document.getElementById('send-btn').addEventListener('click', sendMessage);
-        //     document.getElementById('message-input').addEventListener('keypress', handleMessageInputKeypress);
-        //     document.getElementById('voice-message-btn').addEventListener('click', handleVoiceMessageClick);
-        //     document.getElementById('avatar-file-input').addEventListener('change', handleAvatarUpload);
-        //     document.getElementById('remove-avatar-btn').addEventListener('click', removeAvatar);
-            
-        //     // Отправка сообщения
-        //     document.getElementById('send-btn').addEventListener('click', sendMessage);
-        //     document.getElementById('message-input').addEventListener('keypress', function(e) {
-        //         if (e.key === 'Enter' && !e.shiftKey) {
-        //             e.preventDefault();
-        //             sendMessage();
-        //         }
-        //     });
-
-        //     document.querySelector('.collapsed-search-icon').addEventListener('click', function() {
-        //         const sidebar = document.querySelector('.contacts-sidebar');
-        //         sidebar.classList.add('mobile-expanded');
-                
-        //         // Фокусируемся на поле поиска
-        //         setTimeout(() => {
-        //             document.getElementById('contact-search').focus();
-        //         }, 300);
-        //     });
-
-        //     // Добавляем обработчики для голосовых сообщений
-        //     document.getElementById('voice-message-btn').addEventListener('click', function() {
-        //         if (this.classList.contains('recording')) {
-        //             stopVoiceRecording();
-        //         } else {
-        //             startVoiceRecording();
-        //         }
-        //     });
-            
-        //     document.getElementById('cancel-recording').addEventListener('click', cancelRecording);
-        //     document.getElementById('send-recording').addEventListener('click', sendVoiceMessage);
-
-        //       // Обработчик для мобильных устройств
-        //     const contactsSidebar = document.querySelector('.contacts-sidebar');
-        //     if (window.innerWidth <= 768) {
-        //         contactsSidebar.addEventListener('click', function(e) {
-        //             if (!this.classList.contains('mobile-expanded')) {
-        //                 this.classList.add('mobile-expanded');
-        //                 e.stopPropagation();
-        //             }
-        //         });
-                
-        //         // Закрытие по клику вне сайдбара
-        //         document.addEventListener('click', function(e) {
-        //             if (contactsSidebar.classList.contains('mobile-expanded') && 
-        //                 !contactsSidebar.contains(e.target)) {
-        //                 contactsSidebar.classList.remove('mobile-expanded');
-        //             }
-        //         });
-        //     }
-            
-        //     // Автоматическое изменение высоты текстового поля
-        //     const messageInput = document.getElementById('message-input');
-        //     messageInput.addEventListener('input', function() {
-        //         this.style.height = 'auto';
-        //         this.style.height = (this.scrollHeight) + 'px';
-        //     });
-            
-        //     // Кнопка нового чата
-        //     document.querySelector('.new-chat-btn').addEventListener('click', openSearchModal);
-            
-        //     // Кнопки звонка
-        //     document.getElementById('call-btn').addEventListener('click', startCall);
-        //     document.getElementById('end-call-btn').addEventListener('click', endCall);
-        //     document.getElementById('mute-btn').addEventListener('click', toggleMute);
-            
-        //     // Кнопки входящего звонка
-        //     document.getElementById('accept-call').addEventListener('click', acceptCall);
-        //     document.getElementById('reject-call').addEventListener('click', rejectCall);
-            
-        //     // Кнопка закрытия уведомления
-        //     document.getElementById('close-notification').addEventListener('click', hideNotification);
-            
-        //     // Кнопки формы входа/регистрации
-        //     document.getElementById('login-btn').addEventListener('click', handleLogin);
-        //     document.getElementById('register-btn').addEventListener('click', handleRegister);
-        //     document.getElementById('show-register').addEventListener('click', showRegisterForm);
-        //     document.getElementById('show-login').addEventListener('click', showLoginForm);
-            
-        //     // Поиск контактов
-        //     document.getElementById('contact-search').addEventListener('input', function(e) {
-        //         const searchTerm = e.target.value.toLowerCase();
-        //         const contactItems = document.querySelectorAll('.contact-item');
-                
-        //         contactItems.forEach(item => {
-        //             const contactName = item.querySelector('.contact-name').textContent.toLowerCase();
-        //             if (contactName.includes(searchTerm)) {
-        //                 item.style.display = 'flex';
-        //             } else {
-        //                 item.style.display = 'none';
-        //             }
-        //         });
-        //     });
-            
-        //     // Закрытие модального окна поиска
-        //     document.getElementById('close-search-modal').addEventListener('click', closeSearchModal);
-            
-        //     // Поиск пользователей при вводе
-        //     document.getElementById('user-search-input').addEventListener('input', function(e) {
-        //         const query = e.target.value.trim();
-        //         if (searchTimeout) {
-        //             clearTimeout(searchTimeout);
-        //         }
-        //         searchTimeout = setTimeout(() => {
-        //             searchUsers(query);
-        //         }, 300);
-        //     });
-            
-        //     // Закрытие модального окна по клику на overlay
-        //     document.getElementById('search-modal').addEventListener('click', function(e) {
-        //         if (e.target === this) {
-        //             closeSearchModal();
-        //         }
-        //     });
-            
-        //     document.getElementById('incoming-call-modal').addEventListener('click', function(e) {
-        //         if (e.target === this) {
-        //             rejectCall();
-        //         }
-        //     });
-            
-        //     // Закрытие по клавише Escape
-        //     document.addEventListener('keydown', function(e) {
-        //         if (e.key === 'Escape') {
-        //             if (document.getElementById('search-modal').classList.contains('active')) {
-        //                 closeSearchModal();
-        //             }
-        //             if (document.getElementById('incoming-call-modal').classList.contains('active')) {
-        //                 rejectCall();
-        //             }
-        //             if (document.getElementById('profile-overlay').classList.contains('active')) {
-        //                 hideProfileSettings();
-        //             }
-        //         }
-        //     });
-        // }
-
+        
+        // Убираем старый код и используем простые обработчики
         function setupEventListeners() {
-            if (eventListenersInitialized) {
-                console.log('Event listeners already initialized');
-                return;
-            }
-        
-            // Очищаем все предыдущие обработчики
-            removeAllEventListeners();
-        
-            // Добавляем обработчики с использованием делегирования событий
-            setupEventDelegation();
+            if (eventListenersInitialized) return;
             
-            eventListenersInitialized = true;
-            console.log('Event listeners initialized');
-        }
-
-        function removeAllEventListeners() {
-            // Создаем новые элементы чтобы сбросить все обработчики
+            // Удаляем старые элементы
             replaceElementWithClone('send-btn');
             replaceElementWithClone('voice-message-btn');
             replaceElementWithClone('message-input');
+            replaceElementWithClone('cancel-recording');
+            replaceElementWithClone('send-recording');
+        
+            // Добавляем обработчики напрямую
+            document.getElementById('send-btn')?.addEventListener('click', sendMessage);
+            document.getElementById('voice-message-btn')?.addEventListener('click', handleVoiceMessage);
+            document.getElementById('cancel-recording')?.addEventListener('click', cancelRecording);
+            document.getElementById('send-recording')?.addEventListener('click', sendVoiceMessage);
             
-            currentListeners.clear();
+            // Обработчик клавиатуры
+            document.getElementById('message-input')?.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        
+            eventListenersInitialized = true;
         }
         
-        // Замена элемента на клон для сброса обработчиков
-        function replaceElementWithClone(elementId) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                const clone = element.cloneNode(true);
-                element.parentNode.replaceChild(clone, element);
+        function handleVoiceMessage() {
+            const btn = document.getElementById('voice-message-btn');
+            if (btn.classList.contains('recording')) {
+                stopVoiceRecording();
+            } else {
+                startVoiceRecording();
             }
         }
         
@@ -4608,6 +4440,7 @@
     </script>
 </body>
 </html>
+
 
 
 
