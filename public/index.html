@@ -3617,17 +3617,17 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    renderMessages(data.messages);
+                    (data.messages);
                 } else {
-                    renderMessages([]);
+                    ([]);
                 }
             } catch (error) {
                 console.error('Ошибка загрузки сообщений:', error);
-                renderMessages([]);
+                ([]);
             }
         }
 
-        // function renderMessages(messages) {
+        // function (messages) {
         //     const messagesContainer = document.getElementById('messages-container');
             
         //     // Сохраняем input-area перед очисткой
@@ -3751,39 +3751,46 @@
                 inputArea.remove();
             }
             
-            // Очищаем только сообщения
+            // Очищаем только сообщения (не трогаем welcome-message)
             const messageElements = messagesContainer.querySelectorAll('.message, .no-messages');
             messageElements.forEach(element => {
                 element.remove();
             });
             
-            // Скрываем welcome message если есть сообщения
+            // Обрабатываем welcome message
             const welcomeMessage = document.getElementById('welcome-message');
-            if (welcomeMessage && messages && messages.length > 0) {
-                welcomeMessage.style.display = 'none';
+            if (welcomeMessage) {
+                if (messages && messages.length > 0) {
+                    welcomeMessage.style.display = 'none';
+                } else {
+                    welcomeMessage.style.display = 'block';
+                }
             }
             
             if (!messages || messages.length === 0) {
-                const noMessages = document.createElement('div');
-                noMessages.className = 'no-messages';
-                noMessages.innerHTML = '<p>Нет сообщений. Начните общение!</p>';
-                messagesContainer.appendChild(noMessages);
-                return;
+                // Создаем элемент "нет сообщений" только если нет welcome message
+                if (!welcomeMessage) {
+                    const noMessages = document.createElement('div');
+                    noMessages.className = 'no-messages';
+                    noMessages.innerHTML = '<p>Нет сообщений. Начните общение!</p>';
+                    messagesContainer.appendChild(noMessages);
+                }
+            } else {
+                // Добавляем сообщения
+                messages.forEach(message => {
+                    if (message.audio_url) {
+                        const voiceMessageElement = createVoiceMessageElement(message);
+                        messagesContainer.appendChild(voiceMessageElement);
+                    } else {
+                        const textMessageElement = createTextMessageElement(message);
+                        messagesContainer.appendChild(textMessageElement);
+                    }
+                });
             }
             
-            // Добавляем сообщения
-            messages.forEach(message => {
-                if (message.audio_url) {
-                    const voiceMessageElement = createVoiceMessageElement(message);
-                    messagesContainer.appendChild(voiceMessageElement);
-                } else {
-                    const textMessageElement = createTextMessageElement(message);
-                    messagesContainer.appendChild(textMessageElement);
-                }
-            });
-            
-            // Возвращаем input-area обратно
-            if (inputArea) {
+            // Всегда возвращаем input-area обратно, даже если его не было
+            const currentInputArea = messagesContainer.querySelector('.input-area');
+            if (!currentInputArea && inputArea) {
                 messagesContainer.appendChild(inputArea);
             }
             
@@ -4513,5 +4520,6 @@
     </script>
 </body>
 </html>
+
 
 
