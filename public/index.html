@@ -2233,22 +2233,6 @@
         let searchTimeout = null;
         let messageCheckInterval = null;
         let websocket = null;
-
-        // ===== ПЕРЕМЕННЫЕ ДЛЯ ЗАПИСИ =====
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let recordingTimer = null;
-        let recordingStartTime = 0;
-        let recordingAudioContext = null;
-        let recordingAnalyser = null;
-        let visualizerInterval = null;
-        let currentPlayingAudio = null;
-        let currentPlayingElement = null;
-        let eventListenersInitialized = false;
-        let currentListeners = new Set();
-        let isSending = false;
-        let isRecording = false;
-
         
         // WebRTC переменные
         let peerConnection = null;
@@ -2256,12 +2240,21 @@
         let isCaller = false;
         let pendingIceCandidates = [];
         
+        // Переменные для голосовых сообщений
+        let isRecording = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingTimer = null;
+        let recordingStartTime = 0;
+        let visualizerInterval = null;
+        let eventListenersInitialized = false;
+        let isSending = false;
+        
         // Базовый URL API
         const API_BASE_URL = window.location.origin;
         const WS_URL = window.location.origin.replace('http', 'ws');
         
         // WebRTC конфигурация
-        // Обновите конфигурацию WebRTC
         const configuration = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -2279,17 +2272,9 @@
                     credential: 'openrelayproject'
                 }
             ],
-            iceTransportPolicy: 'all' // Пробуем и relay тоже
+            iceTransportPolicy: 'all'
         };
-                
-        // ===== ИНИЦИАЛИЗАЦИЯ МЕССЕНДЖЕРА =====
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, initializing...');
-            checkAuthStatus();
-            setupEventListeners()
-        });
-        
-        // ===== WEBRTC ИНИЦИАЛИЗАЦИЯ =====
+
         async function initializeWebRTC() {
             try {
                 // Закрываем предыдущее соединение
@@ -2306,7 +2291,6 @@
                     if (event.candidate) {
                         console.log('New ICE candidate generated');
                         
-                        // Проверяем все условия перед отправкой
                         if (websocket && 
                             websocket.readyState === WebSocket.OPEN && 
                             currentCallId && 
@@ -2321,26 +2305,18 @@
                                 candidate: event.candidate,
                                 callId: currentCallId
                             }));
-                        } else {
-                            console.log('Cannot send ICE candidate - missing requirements:');
-                            console.log('WebSocket ready:', websocket ? websocket.readyState : 'no websocket');
-                            console.log('Current call ID:', currentCallId);
-                            console.log('Target user ID:', isCaller ? currentContact?.id : window.incomingCallerId);
                         }
                     }
                 };
-
+        
                 peerConnection.onconnectionstatechange = () => {
                     console.log('Connection state:', peerConnection.connectionState);
-                    
-                    // Обновляем статусы при изменении состояния соединения
                     updateConnectionStatus();
                     
                     if (peerConnection.connectionState === 'connected') {
                         showNotification('Звонок', 'Соединение установлено', 'success');
                     } else if (peerConnection.connectionState === 'disconnected' || 
                                peerConnection.connectionState === 'failed') {
-                        // Не завершаем звонок сразу, даем шанс на восстановление
                         setTimeout(() => {
                             if (peerConnection && (peerConnection.connectionState === 'disconnected' || 
                                                   peerConnection.connectionState === 'failed')) {
@@ -2350,11 +2326,10 @@
                         }, 3000);
                     }
                 };
-
+        
                 peerConnection.onsignalingstatechange = () => {
                     console.log('Signaling state changed to:', peerConnection.signalingState);
                     
-                    // Автоматически обрабатываем ожидающие кандидаты при нужном состоянии
                     if (peerConnection.signalingState === 'stable') {
                         processPendingIceCandidates();
                     }
@@ -2362,27 +2337,14 @@
                 
                 // Обработка входящих потоков
                 peerConnection.ontrack = (event) => {
-                    console.log('Received remote stream, tracks:', event.streams[0].getTracks().length);
+                    console.log('Received remote stream');
                     const remoteAudio = document.getElementById('remote-audio');
                     if (remoteAudio && event.streams[0]) {
                         remoteAudio.srcObject = event.streams[0];
-                        // Запускаем анализ удаленного аудио
                         setTimeout(() => {
                             setupRemoteAudioAnalysis();
                             showNotification('Звонок', 'Соединение установлено!', 'success');
                         }, 1000);
-                    }
-                };
-                
-                // Обработка изменения состояния соединения
-                peerConnection.onconnectionstatechange = () => {
-                    console.log('Connection state:', peerConnection.connectionState);
-                    if (peerConnection.connectionState === 'connected') {
-                        showNotification('Звонок', 'Соединение установлено', 'success');
-                    } else if (peerConnection.connectionState === 'disconnected' || 
-                               peerConnection.connectionState === 'failed') {
-                        endCall();
-                        showNotification('Звонок', 'Соединение прервано', 'error');
                     }
                 };
                 
@@ -2402,63 +2364,344 @@
                 showNotification('Ошибка', 'Не удалось инициализировать звонок', 'error');
             }
         }
-
-        function createTextMessageElement(message) {
-            const messageElement = document.createElement('div');
-            const isOutgoing = message.sender_id == currentUser.id;
+        
+        // ===== ИНИЦИАЛИЗАЦИЯ МЕССЕНДЖЕРА =====
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing...');
+            checkAuthStatus();
+            setupEventListeners();
+        });
+        
+        // ===== ОБРАБОТЧИКИ СОБЫТИЙ =====
+        function setupEventListeners() {
+            if (eventListenersInitialized) return;
             
-            messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
-            const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            messageElement.innerHTML = `
-                <div class="message-text">${escapeHtml(message.message_text)}</div>
-                <div class="message-time">${messageTime}</div>
-            `;
-            
-            return messageElement;
-        }
-
-        function stopAllVoiceMessages() {
-            if (currentPlayingAudio) {
-                currentPlayingAudio.pause();
-                currentPlayingAudio = null;
-            }
-            
-            if (currentPlayingElement) {
-                const playBtn = currentPlayingElement.querySelector('.voice-play-btn');
-                const durationEl = currentPlayingElement.querySelector('.voice-duration');
-                const progressBar = currentPlayingElement.querySelector('.voice-progress');
-                const waveBars = currentPlayingElement.querySelectorAll('.wave-bar');
-                
-                if (playBtn) {
-                    playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                    playBtn.classList.remove('playing');
+            // Используем делегирование событий
+            document.addEventListener('click', function(e) {
+                // Отправка сообщения
+                if (e.target.closest('#send-btn')) {
+                    e.preventDefault();
+                    sendMessage();
+                    return;
                 }
-                if (durationEl) durationEl.classList.remove('playing');
-                if (progressBar) progressBar.style.width = '0%';
-                if (waveBars) {
-                    waveBars.forEach(bar => {
-                        bar.classList.remove('animated', 'active');
+                
+                // Голосовое сообщение
+                if (e.target.closest('#voice-message-btn')) {
+                    e.preventDefault();
+                    const btn = e.target.closest('#voice-message-btn');
+                    if (btn.classList.contains('recording')) {
+                        stopVoiceRecording();
+                    } else {
+                        startVoiceRecording();
+                    }
+                    return;
+                }
+                
+                // Отмена записи
+                if (e.target.closest('#cancel-recording')) {
+                    e.preventDefault();
+                    cancelRecording();
+                    return;
+                }
+                
+                // Отправка записи
+                if (e.target.closest('#send-recording')) {
+                    e.preventDefault();
+                    sendVoiceMessage();
+                    return;
+                }
+                
+                // Звонок
+                if (e.target.closest('#call-btn')) {
+                    e.preventDefault();
+                    startCall();
+                    return;
+                }
+                
+                // Завершение звонка
+                if (e.target.closest('#end-call-btn')) {
+                    e.preventDefault();
+                    endCall();
+                    return;
+                }
+                
+                // Отключение микрофона
+                if (e.target.closest('#mute-btn')) {
+                    e.preventDefault();
+                    toggleMute();
+                    return;
+                }
+                
+                // Принятие входящего звонка
+                if (e.target.closest('#accept-call')) {
+                    e.preventDefault();
+                    acceptCall();
+                    return;
+                }
+                
+                // Отклонение входящего звонка
+                if (e.target.closest('#reject-call')) {
+                    e.preventDefault();
+                    rejectCall();
+                    return;
+                }
+                
+                // Поиск пользователей
+                if (e.target.closest('.control-btn .fa-search') || e.target.closest('.collapsed-search-icon')) {
+                    e.preventDefault();
+                    openSearchModal();
+                    return;
+                }
+                
+                // Настройки
+                if (e.target.closest('.control-btn .fa-cog')) {
+                    e.preventDefault();
+                    showProfileSettings();
+                    return;
+                }
+                
+                // Профиль
+                if (e.target.closest('.control-btn .fa-user')) {
+                    e.preventDefault();
+                    showProfileSettings();
+                    return;
+                }
+                
+                // Выход
+                if (e.target.closest('.control-btn .fa-sign-out-alt')) {
+                    e.preventDefault();
+                    logoutUser();
+                    return;
+                }
+                
+                // Создание нового чата
+                if (e.target.closest('.new-chat-btn')) {
+                    e.preventDefault();
+                    openSearchModal();
+                    return;
+                }
+                
+                // Закрытие модального окна поиска
+                if (e.target.closest('#close-search-modal') || e.target.id === 'search-modal') {
+                    e.preventDefault();
+                    closeSearchModal();
+                    return;
+                }
+                
+                // Закрытие уведомления
+                if (e.target.closest('#close-notification')) {
+                    e.preventDefault();
+                    hideNotification();
+                    return;
+                }
+                
+                // Отмена в профиле
+                if (e.target.closest('#profile-cancel')) {
+                    e.preventDefault();
+                    hideProfileSettings();
+                    return;
+                }
+                
+                // Сохранение профиля
+                if (e.target.closest('#profile-save')) {
+                    e.preventDefault();
+                    saveProfileSettings();
+                    return;
+                }
+                
+                // Удаление аватара
+                if (e.target.closest('#remove-avatar-btn')) {
+                    e.preventDefault();
+                    removeAvatar();
+                    return;
+                }
+                
+                // Загрузка аватара
+                if (e.target.closest('#avatar-upload')) {
+                    e.preventDefault();
+                    document.getElementById('avatar-file-input').click();
+                    return;
+                }
+                
+                // Вход
+                if (e.target.closest('#login-btn')) {
+                    e.preventDefault();
+                    handleLogin();
+                    return;
+                }
+                
+                // Регистрация
+                if (e.target.closest('#register-btn')) {
+                    e.preventDefault();
+                    handleRegister();
+                    return;
+                }
+                
+                // Переключение на регистрацию
+                if (e.target.closest('#show-register')) {
+                    e.preventDefault();
+                    showRegisterForm();
+                    return;
+                }
+                
+                // Переключение на вход
+                if (e.target.closest('#show-login')) {
+                    e.preventDefault();
+                    showLoginForm();
+                    return;
+                }
+                
+                // Выбор пользователя из поиска
+                if (e.target.closest('.search-result-item')) {
+                    e.preventDefault();
+                    const userElement = e.target.closest('.search-result-item');
+                    const userId = userElement.dataset.userId;
+                    const user = allUsers.find(u => u.id == userId);
+                    if (user) {
+                        selectUserFromSearch(user);
+                    }
+                    return;
+                }
+                
+                // Выбор контакта из списка
+                if (e.target.closest('.contact-item')) {
+                    e.preventDefault();
+                    const contactElement = e.target.closest('.contact-item');
+                    const userId = contactElement.dataset.userId;
+                    const user = allUsers.find(u => u.id == userId);
+                    if (user) {
+                        selectContact(user);
+                    }
+                    return;
+                }
+                
+                // Воспроизведение голосового сообщения
+                if (e.target.closest('.voice-play-btn')) {
+                    e.preventDefault();
+                    const voiceMessage = e.target.closest('.voice-message-container');
+                    const audioUrl = voiceMessage.dataset.audioUrl;
+                    if (audioUrl) {
+                        playVoiceMessage(audioUrl);
+                    }
+                    return;
+                }
+            });
+        
+            // Обработка клавиатуры
+            document.addEventListener('keypress', function(e) {
+                // Отправка сообщения по Enter
+                if (e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                    return;
+                }
+                
+                // Закрытие модальных окон по Escape
+                if (e.key === 'Escape') {
+                    if (document.getElementById('search-modal').classList.contains('active')) {
+                        e.preventDefault();
+                        closeSearchModal();
+                        return;
+                    }
+                    if (document.getElementById('profile-overlay').classList.contains('active')) {
+                        e.preventDefault();
+                        hideProfileSettings();
+                        return;
+                    }
+                    if (document.getElementById('auth-overlay').classList.contains('active')) {
+                        e.preventDefault();
+                        // Не закрываем auth overlay по Escape для UX
+                        return;
+                    }
+                    if (document.getElementById('incoming-call-modal').classList.contains('active')) {
+                        e.preventDefault();
+                        rejectCall();
+                        return;
+                    }
+                }
+            });
+        
+            // Обработка изменения файла аватара
+            document.getElementById('avatar-file-input')?.addEventListener('change', handleAvatarUpload);
+        
+            // Обработка поиска пользователей
+            document.getElementById('user-search-input')?.addEventListener('input', function(e) {
+                const query = e.target.value.trim();
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                searchTimeout = setTimeout(() => {
+                    searchUsers(query);
+                }, 300);
+            });
+        
+            // Обработка изменения высоты текстового поля
+            const messageInput = document.getElementById('message-input');
+            if (messageInput) {
+                messageInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
+            }
+        
+            // Обработка hover для сайдбара (для анимаций)
+            const contactsSidebar = document.querySelector('.contacts-sidebar');
+            if (contactsSidebar) {
+                contactsSidebar.addEventListener('mouseenter', function() {
+                    this.classList.add('hovered');
+                });
+                
+                contactsSidebar.addEventListener('mouseleave', function() {
+                    this.classList.remove('hovered');
+                });
+            }
+        
+            // Обработка для мобильных устройств
+            if (window.innerWidth <= 768) {
+                const contactsSidebar = document.querySelector('.contacts-sidebar');
+                if (contactsSidebar) {
+                    contactsSidebar.addEventListener('click', function(e) {
+                        if (!this.classList.contains('mobile-expanded')) {
+                            this.classList.add('mobile-expanded');
+                            e.stopPropagation();
+                        }
+                    });
+                    
+                    // Закрытие по клику вне сайдбара
+                    document.addEventListener('click', function(e) {
+                        if (contactsSidebar.classList.contains('mobile-expanded') && 
+                            !contactsSidebar.contains(e.target)) {
+                            contactsSidebar.classList.remove('mobile-expanded');
+                        }
                     });
                 }
-                
-                currentPlayingElement = null;
             }
+        
+            eventListenersInitialized = true;
+            console.log('Все обработчики событий настроены');
         }
-
+        
+            // Обработка клавиатуры
+            document.addEventListener('keypress', function(e) {
+                if (e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            eventListenersInitialized = true;
+        }
+        
+        // ===== ФУНКЦИИ ДЛЯ ГОЛОСОВЫХ СООБЩЕНИЙ =====
         async function startVoiceRecording() {
             if (!currentUser || !currentContact) {
                 showNotification('Ошибка', 'Выберите чат для отправки голосового сообщения', 'error');
                 return;
             }
         
-            if (isRecording) {
-                console.log('Запись уже идет');
-                return;
-            }
+            if (isRecording) return;
         
             try {
-                // Запрашиваем доступ к микрофону
                 audioStream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         echoCancellation: true,
@@ -2467,33 +2710,25 @@
                     } 
                 });
         
-                // Создаем медиа-рекордер
                 mediaRecorder = new MediaRecorder(audioStream, {
                     mimeType: 'audio/webm;codecs=opus'
                 });
         
                 audioChunks = [];
                 
-                // Обработчик данных записи
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0) {
                         audioChunks.push(event.data);
                     }
                 };
         
-                // Запускаем визуализатор
                 setupAudioVisualizer(audioStream);
-        
-                // Запускаем запись
                 mediaRecorder.start(100);
                 
-                // Обновляем UI
                 document.getElementById('voice-message-btn').classList.add('recording');
                 document.getElementById('voice-recorder').classList.add('active');
                 
-                // Запускаем таймер
                 startRecordingTimer();
-                
                 isRecording = true;
         
             } catch (error) {
@@ -2515,174 +2750,31 @@
             showNotification('Инфо', 'Запись отменена', 'info');
         }
         
-        async function sendVoiceMessage() {
-            if (isSending) return;
-            isSending = true;
-        
-            try {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'voice-message.webm');
-                formData.append('senderId', currentUser.id);
-                formData.append('receiverId', currentContact.id);
-                formData.append('duration', Math.floor((Date.now() - recordingStartTime) / 1000));
-        
-                const response = await fetch(`${API_BASE_URL}/api/send-voice-message`, {
-                    method: 'POST',
-                    body: formData
-                });
-        
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-        
-                const responseData = await response.json();
-        
-                if (responseData.success) {
-                    showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
-                    stopRecordingAndCleanup();
-                    await loadMessages();
-                } else {
-                    showNotification('Ошибка', responseData.error, 'error');
-                }
-        
-            } catch (error) {
-                console.error('Ошибка отправки голосового сообщения:', error);
-                showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
-            } finally {
-                isSending = false;
-                audioChunks = [];
-            }
-        }
-        
         function stopRecordingAndCleanup() {
-            // Останавливаем медиарекордер
             if (mediaRecorder && mediaRecorder.state === 'recording') {
                 mediaRecorder.stop();
             }
             
-            // Останавливаем таймер
             stopRecordingTimer();
-            
-            // Останавливаем визуализатор
             stopAudioVisualizer();
             
-            // Закрываем медиапоток
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
                 audioStream = null;
             }
             
-            // Обновляем UI
             document.getElementById('voice-recorder').classList.remove('active');
             document.getElementById('voice-message-btn').classList.remove('recording');
-            
-            // Сбрасываем флаги
             isRecording = false;
         }
-        
-        // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
-        function startRecordingTimer() {
-            recordingStartTime = Date.now();
-            const timerElement = document.getElementById('recording-timer');
-            
-            recordingTimer = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-                const seconds = (elapsed % 60).toString().padStart(2, '0');
-                timerElement.textContent = `${minutes}:${seconds}`;
-            }, 1000);
-        }
-        
-        function stopRecordingTimer() {
-            if (recordingTimer) {
-                clearInterval(recordingTimer);
-                recordingTimer = null;
-            }
-            document.getElementById('recording-timer').textContent = '00:00';
-        }
-        
-        function setupAudioVisualizer(stream) {
-            try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                const source = audioContext.createMediaStreamSource(stream);
-                
-                source.connect(analyser);
-                analyser.fftSize = 256;
-                
-                const bufferLength = analyser.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-                const visualizer = document.getElementById('recording-visualizer');
-                
-                // Очищаем визуализатор
-                visualizer.innerHTML = '';
-                
-                // Создаем бары для визуализации
-                for (let i = 0; i < 20; i++) {
-                    const bar = document.createElement('div');
-                    bar.className = 'visualizer-bar';
-                    bar.style.height = '5px';
-                    visualizer.appendChild(bar);
-                }
-                
-                const bars = visualizer.querySelectorAll('.visualizer-bar');
-                
-                visualizerInterval = setInterval(() => {
-                    analyser.getByteFrequencyData(dataArray);
-                    
-                    // Обновляем высоту баров
-                    bars.forEach((bar, index) => {
-                        const value = dataArray[Math.floor(index * bufferLength / bars.length)];
-                        const height = Math.max(5, value / 255 * 40);
-                        bar.style.height = height + 'px';
-                    });
-                }, 100);
-                
-            } catch (error) {
-                console.error('Ошибка визуализатора:', error);
-            }
-        }
-                
-        function stopAudioVisualizer() {
-            if (visualizerInterval) {
-                clearInterval(visualizerInterval);
-                visualizerInterval = null;
-            }
-            
-            const visualizer = document.getElementById('recording-visualizer');
-            if (visualizer) {
-                visualizer.innerHTML = '';
-            }
-        }
 
-        function updateConnectionStatus() {
-            if (!peerConnection || !isCallActive) return;
-            
-            const connectionState = peerConnection.connectionState;
-            const userStatus = document.getElementById('user-status');
-            const contactStatus = document.getElementById('contact-status');
-            
-            if (connectionState === 'connected') {
-                contactStatus.textContent = 'Соединение установлено';
-                userStatus.textContent = isMuted ? 'Микрофон выключен' : 'Готов к разговору';
-            } else if (connectionState === 'connecting') {
-                contactStatus.textContent = 'Подключается...';
-                userStatus.textContent = 'Подключается...';
-            } else if (connectionState === 'disconnected') {
-                contactStatus.textContent = 'Соединение потеряно';
-                userStatus.textContent = 'Соединение потеряно';
-            }
-        }
-        
-        // Обработка ожидающих ICE кандидатов
-        async function processPendingIceCandidates() {
+        function processPendingIceCandidates() {
             if (pendingIceCandidates.length > 0 && peerConnection && peerConnection.remoteDescription) {
                 console.log('Processing', pendingIceCandidates.length, 'pending ICE candidates');
                 
                 for (const candidate of pendingIceCandidates) {
                     try {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
                         console.log('Pending ICE candidate added');
                     } catch (error) {
                         console.error('Error adding pending ICE candidate:', error);
@@ -2692,472 +2784,6 @@
             }
         }
         
-        // ===== WEB SOCKET СОЕДИНЕНИЕ =====
-        function connectWebSocket() {
-            if (!currentUser) return;
-            
-            try {
-                websocket = new WebSocket(`${WS_URL}?userId=${currentUser.id}`);
-                
-                websocket.onopen = () => {
-                    console.log('WebSocket connected');
-                };
-                
-                websocket.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        handleWebSocketMessage(data);
-                    } catch (error) {
-                        console.error('WebSocket message parse error:', error);
-                    }
-                };
-                
-                websocket.onclose = () => {
-                    console.log('WebSocket disconnected');
-                    setTimeout(connectWebSocket, 3000);
-                };
-                
-                websocket.onerror = (error) => {
-                    console.error('WebSocket error:', error);
-                };
-                
-            } catch (error) {
-                console.error('WebSocket connection error:', error);
-                setTimeout(connectWebSocket, 3000);
-            }
-        }
-        
-        function handleWebSocketMessage(data) {
-            console.log('WebSocket message received:', data.type);
-            
-            switch (data.type) {
-                case 'incoming-call':
-                    handleIncomingCall(data);
-                    break;
-                case 'call-answered':
-                    handleCallAnswered(data);
-                    break;
-                case 'ice-candidate':
-                    handleIceCandidate(data);
-                    break;
-                case 'call-rejected':
-                    handleCallRejected();
-                    break;
-                case 'call-ended':
-                    handleCallEnded();
-                    break;
-                case 'call-error':
-                    handleCallError(data);
-                    break;
-            }
-        }
-        
-        // ===== ОБРАБОТКА ЗВОНКОВ =====
-        async function handleIncomingCall(data) {
-            const { callerId, offer, callerName, callerAvatar, callId } = data;
-            
-            // Сохраняем данные звонка
-            window.incomingOffer = offer;
-            window.incomingCallerId = callerId;
-            window.incomingCallId = callId;
-            
-            // Показываем модалку входящего звонка
-            document.getElementById('caller-name').textContent = callerName || 'Неизвестный';
-            document.getElementById('caller-avatar').src = callerAvatar || './free-icon-user-avatar-3607444.png';
-            document.getElementById('incoming-call-modal').classList.add('active');
-            
-            // Проигрываем звук звонка
-            playRingtone();
-            
-            // Автоматически отклоняем звонок через 30 секунд
-            clearTimeout(window.callTimeout);
-            window.callTimeout = setTimeout(() => {
-                if (document.getElementById('incoming-call-modal').classList.contains('active')) {
-                    rejectCall();
-                    showNotification('Звонок', 'Входящий звонок пропущен', 'info');
-                }
-            }, 30000);
-        }
-        
-        async function handleCallAnswered(data) {
-            const { answer, callId } = data;
-            
-            if (peerConnection && isCaller && callId === currentCallId) {
-                try {
-                    console.log('Current signaling state:', peerConnection.signalingState);
-                    
-                    // Ждем правильного состояния
-                    if (peerConnection.signalingState !== 'have-local-offer') {
-                        console.log('Wrong state for answer, waiting...');
-                        // Повторяем попытку через секунду
-                        setTimeout(() => handleCallAnswered(data), 1000);
-                        return;
-                    }
-                    
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                    console.log('Remote description (answer) set successfully');
-                    showNotification('Звонок', 'Собеседник ответил на звонок', 'success');
-                    stopRingtone();
-                    
-                } catch (error) {
-                    console.error('Error setting remote description:', error);
-                    // Пробуем еще раз через секунду
-                    setTimeout(() => handleCallAnswered(data), 1000);
-                }
-            }
-        }
-        
-        async function handleIceCandidate(data) {
-            const { candidate, userId, callId } = data;
-            
-            console.log('Received ICE candidate from user:', userId, 'for call:', callId);
-            
-            // Проверяем, что это кандидат для текущего звонка
-            if (callId !== currentCallId) {
-                console.log('ICE candidate for different call, ignoring. Expected:', currentCallId, 'Got:', callId);
-                return;
-            }
-            
-            if (peerConnection && candidate) {
-                try {
-                    console.log('Adding ICE candidate from:', userId);
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    console.log('ICE candidate added successfully from user:', userId);
-                    
-                } catch (error) {
-                    console.error('Error adding ICE candidate:', error);
-                    // Сохраняем для повторной попытки
-                    pendingIceCandidates.push(candidate);
-                }
-            } else {
-                console.log('No peer connection or candidate, queuing ICE candidate');
-                pendingIceCandidates.push(candidate);
-            }
-        }
-
-        function checkIceConnection() {
-            if (peerConnection) {
-                console.log('ICE connection state:', peerConnection.iceConnectionState);
-                console.log('ICE gathering state:', peerConnection.iceGatheringState);
-                
-                // Если ICE застрял в состоянии checking, пытаемся перезапустить
-                if (peerConnection.iceConnectionState === 'checking') {
-                    console.log('ICE is in checking state for too long');
-                }
-            }
-        }
-        
-        // Проверяем каждые 3 секунды
-        setInterval(checkIceConnection, 3000);
-
-        async function restartIce() {
-            if (!peerConnection) return;
-            
-            try {
-                console.log('Restarting ICE...');
-                const offer = await peerConnection.createOffer({ iceRestart: true });
-                await peerConnection.setLocalDescription(offer);
-                
-                if (isCaller && websocket) {
-                    websocket.send(JSON.stringify({
-                        type: 'call-offer',
-                        targetUserId: currentContact.id,
-                        offer: offer,
-                        callId: currentCallId,
-                        iceRestart: true
-                    }));
-                }
-                
-            } catch (error) {
-                console.error('Error restarting ICE:', error);
-            }
-        }
-        
-        // Автоматический restart ICE если соединение не устанавливается
-        setTimeout(() => {
-            if (peerConnection && peerConnection.iceConnectionState === 'checking') {
-                restartIce();
-            }
-        }, 10000);
-        
-        function handleCallRejected() {
-            endCall();
-            showNotification('Звонок', 'Собеседник отклонил ваш звонок', 'info');
-            stopRingtone();
-        }
-        
-        function handleCallEnded() {
-            endCall();
-            showNotification('Звонок', 'Собеседник завершил звонок', 'info');
-            stopRingtone();
-        }
-        
-        function handleCallError(data) {
-            endCall();
-            showNotification('Ошибка звонка', data.message || 'Не удалось установить соединение', 'error');
-            stopRingtone();
-        }
-        
-        // ===== ОСНОВНЫЕ ФУНКЦИИ ЗВОНКОВ =====
-        async function startCall() {
-            if (!currentContact) {
-                showNotification('Ошибка', 'Выберите собеседника для звонка', 'error');
-                return;
-            }
-            
-            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-                showNotification('Ошибка', 'Нет соединения с сервером', 'error');
-                return;
-            }
-            
-            const callTimeout = setTimeout(() => {
-                if (isCallActive && peerConnection && peerConnection.connectionState !== 'connected') {
-                    console.log('Call timeout - ending call');
-                    endCall();
-                    showNotification('Ошибка', 'Не удалось установить соединение', 'error');
-                }
-            }, 15000); // 15 секунд
-            
-            try {
-                // Получаем медиапоток
-                audioStream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        sampleRate: 44100
-                    },
-                    video: false 
-                });
-                
-                // Запускаем анализ аудио
-                startAudioAnalysis();
-                
-                // Инициализируем WebRTC
-                await initializeWebRTC();
-                
-                isCaller = true;
-                currentCallId = Date.now().toString();
-                
-                // Создаем offer
-                const offer = await peerConnection.createOffer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: false
-                });
-                
-                // Сначала устанавливаем локальное описание
-                await peerConnection.setLocalDescription(offer);
-                console.log('Local description (offer) set');
-                
-                // Затем отправляем offer
-                websocket.send(JSON.stringify({
-                    type: 'call-offer',
-                    targetUserId: currentContact.id,
-                    offer: offer,
-                    callerName: currentUser.name || currentUser.username,
-                    callerAvatar: currentUser.avatar || './free-icon-user-avatar-3607444.png',
-                    callId: currentCallId
-                }));
-                
-                // Показываем интерфейс звонка
-                showCallInterface();
-                showNotification('Звонок', 'Вызываем собеседника...', 'info');
-                
-                // Очищаем таймаут при успешном соединении
-                const checkConnection = setInterval(() => {
-                    if (peerConnection && peerConnection.connectionState === 'connected') {
-                        clearTimeout(callTimeout);
-                        clearInterval(checkConnection);
-                    } else if (peerConnection && peerConnection.connectionState === 'failed') {
-                        clearTimeout(callTimeout);
-                        clearInterval(checkConnection);
-                        endCall();
-                    }
-                }, 1000);
-                
-            } catch (error) {
-                clearTimeout(callTimeout);
-                console.error('Ошибка начала звонка:', error);
-                showNotification('Ошибка', 'Не удалось начать звонок: ' + error.message, 'error');
-            }
-        }
-
-        function checkIceCandidates() {
-            console.log('=== ICE Candidates Check ===');
-            console.log('WebSocket state:', websocket ? websocket.readyState : 'not connected');
-            console.log('Current call ID:', currentCallId);
-            console.log('isCaller:', isCaller);
-            console.log('Current contact:', currentContact ? currentContact.id : 'none');
-            console.log('Incoming caller:', window.incomingCallerId);
-            
-            if (peerConnection) {
-                console.log('Peer connection state:', peerConnection.connectionState);
-                console.log('ICE gathering state:', peerConnection.iceGatheringState);
-            }
-        }
-        
-        // Вызывайте для диагностики
-        setTimeout(checkIceCandidates, 2000);
-        
-        async function acceptCall() {
-            if (!window.incomingOffer) {
-                showNotification('Ошибка', 'Нет входящего звонка', 'error');
-                return;
-            }
-            
-            try {
-                // Получаем медиапоток
-                audioStream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        sampleRate: 44100
-                    },
-                    video: false 
-                });
-                
-                // Запускаем анализ аудио
-                startAudioAnalysis();
-                
-                // Инициализируем WebRTC
-                await initializeWebRTC();
-                
-                isCaller = false;
-                currentCallId = window.incomingCallId;
-                
-                // Устанавливаем удаленное описание (offer)
-                console.log('Setting remote offer...');
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
-                console.log('Remote offer set successfully');
-                
-                // Создаем answer
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                console.log('Local description (answer) set');
-                
-                // Отправляем answer
-                websocket.send(JSON.stringify({
-                    type: 'call-answer',
-                    callerId: window.incomingCallerId,
-                    answer: answer,
-                    callId: currentCallId
-                }));
-                
-                // Скрываем модалку и показываем интерфейс звонка
-                document.getElementById('incoming-call-modal').classList.remove('active');
-                showCallInterface();
-                showNotification('Звонок', 'Соединение установлено', 'success');
-                stopRingtone();
-                
-            } catch (error) {
-                console.error('Ошибка принятия звонка:', error);
-                showNotification('Ошибка', 'Не удалось принять звонок', 'error');
-            }
-        }
-        
-        function rejectCall() {
-            if (websocket && window.incomingCallerId) {
-                websocket.send(JSON.stringify({
-                    type: 'reject-call',
-                    callerId: window.incomingCallerId,
-                    callId: window.incomingCallId
-                }));
-            }
-            
-            document.getElementById('incoming-call-modal').classList.remove('active');
-            window.incomingOffer = null;
-            window.incomingCallerId = null;
-            window.incomingCallId = null;
-            stopRingtone();
-        }
-        
-        function endCall() {
-            console.log('Ending call');
-            
-            // Отправляем сообщение о завершении звонка
-            if (websocket && currentCallId) {
-                const targetId = isCaller ? currentContact.id : window.incomingCallerId;
-                if (targetId) {
-                    websocket.send(JSON.stringify({
-                        type: 'end-call',
-                        targetUserId: targetId,
-                        callId: currentCallId
-                    }));
-                }
-            }
-            
-            // Останавливаем анализ аудио
-            stopAudioAnalysis();
-            stopRemoteAudioAnalysis();
-            
-            // Закрываем соединение
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
-            
-            // Останавливаем медиапоток
-            if (audioStream) {
-                audioStream.getTracks().forEach(track => track.stop());
-                audioStream = null;
-            }
-            
-            // Сбрасываем состояние
-            isCallActive = false;
-            isCaller = false;
-            currentCallId = null;
-            window.incomingOffer = null;
-            window.incomingCallerId = null;
-            window.incomingCallId = null;
-            pendingIceCandidates = [];
-            
-            // Скрываем интерфейс звонка
-            document.getElementById('call-container').classList.remove('active');
-            document.getElementById('incoming-call-modal').classList.remove('active');
-            
-            stopRingtone();
-            clearTimeout(window.callTimeout);
-            
-            // Восстанавливаем нормальный интерфейс
-            document.getElementById('message-input').disabled = !currentContact;
-            document.getElementById('send-btn').disabled = !currentContact;
-            
-            showNotification('Звонок', 'Звонок завершен', 'info');
-        }
-
-        function replaceElementWithClone(elementId) {
-            const element = document.getElementById(elementId);
-            if (element && element.parentNode) {
-                const clone = element.cloneNode(true);
-                element.parentNode.replaceChild(clone, element);
-                return clone;
-            }
-            return null;
-        }
-        
-        function checkConnectionStatus() {
-            if (!isCallActive) return;
-            
-            if (peerConnection) {
-                const connectionState = peerConnection.connectionState;
-                const iceState = peerConnection.iceConnectionState;
-                
-                // Обновляем статус в зависимости от состояния соединения
-                if (connectionState === 'connected') {
-                    document.getElementById('contact-status').textContent = 'Соединение установлено';
-                    document.getElementById('user-status').textContent = isMuted ? 'Микрофон выключен' : 'Готов к разговору';
-                } else if (connectionState === 'connecting' || iceState === 'checking') {
-                    document.getElementById('contact-status').textContent = 'Подключается...';
-                    document.getElementById('user-status').textContent = 'Подключается...';
-                } else if (connectionState === 'disconnected' || connectionState === 'failed') {
-                    document.getElementById('contact-status').textContent = 'Соединение прервано';
-                    document.getElementById('user-status').textContent = 'Соединение прервано';
-                }
-            }
-            
-            // Продолжаем проверять каждые 2 секунды
-            setTimeout(checkConnectionStatus, 2000);
-        }
-
         function showCallInterface() {
             const callContainer = document.getElementById('call-container');
             callContainer.classList.add('active');
@@ -3175,12 +2801,31 @@
             // Запускаем проверку состояния соединения
             checkConnectionStatus();
         }
-
-        function startAudioAnalysis() {
-            if (!audioStream) {
-                console.log('No audio stream for analysis');
-                return;
+        
+        function checkConnectionStatus() {
+            if (!isCallActive) return;
+            
+            if (peerConnection) {
+                const connectionState = peerConnection.connectionState;
+                const iceState = peerConnection.iceConnectionState;
+                
+                if (connectionState === 'connected') {
+                    document.getElementById('contact-status').textContent = 'Соединение установлено';
+                    document.getElementById('user-status').textContent = isMuted ? 'Микрофон выключен' : 'Готов к разговору';
+                } else if (connectionState === 'connecting' || iceState === 'checking') {
+                    document.getElementById('contact-status').textContent = 'Подключается...';
+                    document.getElementById('user-status').textContent = 'Подключается...';
+                } else if (connectionState === 'disconnected') {
+                    document.getElementById('contact-status').textContent = 'Соединение потеряно';
+                    document.getElementById('user-status').textContent = 'Соединение потеряно';
+                }
             }
+            
+            setTimeout(checkConnectionStatus, 2000);
+        }
+        
+        function startAudioAnalysis() {
+            if (!audioStream) return;
             
             try {
                 const analysisContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -3202,13 +2847,11 @@
                     }
                     let average = sum / bufferLength;
                     
-                    // Обновляем индикатор громкости
                     const volumeLevel = document.getElementById('user-volume');
                     if (volumeLevel) {
                         volumeLevel.style.width = Math.min(average * 0.5, 100) + '%';
                     }
                     
-                    // Обновляем статус только если соединение установлено
                     const userStatus = document.getElementById('user-status');
                     if (userStatus && !isMuted && peerConnection && peerConnection.connectionState === 'connected') {
                         if (average > 20) {
@@ -3231,7 +2874,7 @@
                 console.error('Audio analysis error:', error);
             }
         }
-
+        
         function setupRemoteAudioAnalysis() {
             const remoteAudio = document.getElementById('remote-audio');
             if (!remoteAudio || !remoteAudio.srcObject) return;
@@ -3256,13 +2899,11 @@
                     }
                     let average = sum / bufferLength;
                     
-                    // Обновляем индикатор громкости собеседника
                     const contactVolume = document.getElementById('contact-volume');
                     if (contactVolume) {
                         contactVolume.style.width = Math.min(average * 2, 100) + '%';
                     }
                     
-                    // Обновляем статус собеседника только если соединение установлено
                     const contactStatus = document.getElementById('contact-status');
                     if (contactStatus && peerConnection && peerConnection.connectionState === 'connected') {
                         if (average > 5) {
@@ -3319,30 +2960,12 @@
             document.getElementById('contact-pulse').style.animation = 'none';
         }
         
-        // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
-        function playRingtone() {
-            // Простой звук звонка
-            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF5fdJivrJBhNjVgodDbq2EcBSt5t+uN');
-            audio.loop = true;
-            audio.volume = 0.3;
-            audio.play().catch(e => console.log('Audio play failed:', e));
-            window.ringtone = audio;
-        }
-        
-        function stopRingtone() {
-            if (window.ringtone) {
-                window.ringtone.pause();
-                window.ringtone = null;
-            }
-        }
-        
         function toggleMute() {
             if (!audioStream) return;
             
             isMuted = !isMuted;
             const muteBtn = document.getElementById('mute-btn');
             
-            // Отключаем/включаем аудио дорожки
             audioStream.getAudioTracks().forEach(track => {
                 track.enabled = !isMuted;
             });
@@ -3358,7 +2981,133 @@
             }
         }
         
-                // ===== ФУНКЦИИ ДЛЯ РАБОТЫ С АУТЕНТИФИКАЦИЕЙ =====
+        function playRingtone() {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF5fdJivrJBhNjVgodDbq2EcBSt5t+uN');
+            audio.loop = true;
+            audio.volume = 0.3;
+            audio.play().catch(e => console.log('Audio play failed:', e));
+            window.ringtone = audio;
+        }
+        
+        function stopRingtone() {
+            if (window.ringtone) {
+                window.ringtone.pause();
+                window.ringtone = null;
+            }
+        }
+        
+        async function sendVoiceMessage() {
+            if (isSending) return;
+            isSending = true;
+        
+            try {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'voice-message.webm');
+                formData.append('senderId', currentUser.id);
+                formData.append('receiverId', currentContact.id);
+                formData.append('duration', Math.floor((Date.now() - recordingStartTime) / 1000));
+        
+                const response = await fetch(`${API_BASE_URL}/api/send-voice-message`, {
+                    method: 'POST',
+                    body: formData
+                });
+        
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+        
+                const responseData = await response.json();
+        
+                if (responseData.success) {
+                    showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
+                    stopRecordingAndCleanup();
+                    await loadMessages();
+                } else {
+                    showNotification('Ошибка', responseData.error, 'error');
+                }
+        
+            } catch (error) {
+                console.error('Ошибка отправки голосового сообщения:', error);
+                showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
+            } finally {
+                isSending = false;
+                audioChunks = [];
+            }
+        }
+        
+        function startRecordingTimer() {
+            recordingStartTime = Date.now();
+            const timerElement = document.getElementById('recording-timer');
+            
+            recordingTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const seconds = (elapsed % 60).toString().padStart(2, '0');
+                timerElement.textContent = `${minutes}:${seconds}`;
+            }, 1000);
+        }
+        
+        function stopRecordingTimer() {
+            if (recordingTimer) {
+                clearInterval(recordingTimer);
+                recordingTimer = null;
+            }
+            document.getElementById('recording-timer').textContent = '00:00';
+        }
+        
+        function setupAudioVisualizer(stream) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
+                
+                source.connect(analyser);
+                analyser.fftSize = 256;
+                
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                const visualizer = document.getElementById('recording-visualizer');
+                
+                visualizer.innerHTML = '';
+                
+                for (let i = 0; i < 20; i++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'visualizer-bar';
+                    bar.style.height = '5px';
+                    visualizer.appendChild(bar);
+                }
+                
+                const bars = visualizer.querySelectorAll('.visualizer-bar');
+                
+                visualizerInterval = setInterval(() => {
+                    analyser.getByteFrequencyData(dataArray);
+                    
+                    bars.forEach((bar, index) => {
+                        const value = dataArray[Math.floor(index * bufferLength / bars.length)];
+                        const height = Math.max(5, value / 255 * 40);
+                        bar.style.height = height + 'px';
+                    });
+                }, 100);
+                
+            } catch (error) {
+                console.error('Ошибка визуализатора:', error);
+            }
+        }
+        
+        function stopAudioVisualizer() {
+            if (visualizerInterval) {
+                clearInterval(visualizerInterval);
+                visualizerInterval = null;
+            }
+            
+            const visualizer = document.getElementById('recording-visualizer');
+            if (visualizer) {
+                visualizer.innerHTML = '';
+            }
+        }
+        
+        // ===== ОСНОВНЫЕ ФУНКЦИИ МЕССЕНДЖЕРА =====
         function checkAuthStatus() {
             const savedUser = localStorage.getItem('fuzionprime_current_user');
             
@@ -3375,167 +3124,12 @@
             }
         }
         
-        async function registerUser(username, password, name) {
-            showLoader('register');
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/register`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, password, name })
-                });
-                
-                const data = await response.json();
-                hideLoader('register');
-                
-                if (data.success) {
-                    showNotification('Успех', 'Аккаунт успешно создан! Теперь вы можете войти.', 'success');
-                    showLoginForm();
-                } else {
-                    showNotification('Ошибка', data.error || 'Ошибка при регистрации', 'error');
-                }
-            } catch (error) {
-                hideLoader('register');
-                console.error('Ошибка регистрации:', error);
-                showNotification('Ошибка', 'Не удалось подключиться к серверу', 'error');
-            }
-        }
-        
-        async function loginUser(username, password) {
-            showLoader('login');
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, password })
-                });
-                
-                const data = await response.json();
-                hideLoader('login');
-                
-                if (data.success) {
-                    currentUser = data.user;
-                    localStorage.setItem('fuzionprime_current_user', JSON.stringify(currentUser));
-                    hideLoginForm();
-                    initializeApp();
-                    showNotification('Успешный вход', `Добро пожаловать, ${currentUser.name || currentUser.username}!`, 'success');
-                } else {
-                    showNotification('Ошибка', data.error || 'Ошибка при входе', 'error');
-                }
-            } catch (error) {
-                hideLoader('login');
-                console.error('Ошибка входа:', error);
-                showNotification('Ошибка', 'Не удалось подключиться к серверу', 'error');
-            }
-        }
-
-        // Добавьте эту функцию для принудительной синхронизации
-        async function syncWebRTCState() {
-            if (!peerConnection) return;
-            
-            console.log('=== WebRTC State Sync ===');
-            console.log('Signaling state:', peerConnection.signalingState);
-            console.log('Connection state:', peerConnection.connectionState);
-            console.log('ICE state:', peerConnection.iceConnectionState);
-            console.log('Pending candidates:', pendingIceCandidates.length);
-            
-            // Принудительно обрабатываем ожидающие кандидаты
-            if (peerConnection.signalingState === 'stable' && pendingIceCandidates.length > 0) {
-                console.log('Processing pending candidates during sync');
-                processPendingIceCandidates();
-            }
-        }
-        
-        // Вызывайте синхронизацию периодически
-        setInterval(syncWebRTCState, 5000);
-        
-        function logoutUser() {
-            currentUser = null;
-            localStorage.removeItem('fuzionprime_current_user');
-            
-            if (messageCheckInterval) {
-                clearInterval(messageCheckInterval);
-                messageCheckInterval = null;
-            }
-            
-            if (websocket) {
-                websocket.close();
-                websocket = null;
-            }
-            
-            if (isCallActive) {
-                endCall();
-            }
-            
-            showLoginForm();
-            showNotification('Выход', 'Вы вышли из системы', 'info');
-        }
-        
-        async function updateUserProfile(name, avatar) {
-            if (!currentUser) return false;
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/update-profile`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        userId: currentUser.id, 
-                        name, 
-                        avatar 
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    currentUser = data.user;
-                    localStorage.setItem('fuzionprime_current_user', JSON.stringify(currentUser));
-                    updateProfileUI();
-                    showNotification('Успех', 'Профиль успешно обновлен', 'success');
-                    return true;
-                } else {
-                    showNotification('Ошибка', data.error || 'Ошибка при обновлении профиля', 'error');
-                    return false;
-                }
-            } catch (error) {
-                console.error('Ошибка обновления профиля:', error);
-                showNotification('Ошибка', 'Не удалось обновить профиль', 'error');
-                return false;
-            }
-        }
-        
-        // ===== ОСНОВНЫЕ ФУНКЦИИ ПРИЛОЖЕНИЯ =====
         function initializeApp() {
             document.getElementById('logout-btn').style.display = 'block';
             loadUsers();
             updateProfileUI();
             startMessageChecking();
             connectWebSocket();
-        }
-        
-        function startMessageChecking() {
-            messageCheckInterval = setInterval(async () => {
-                if (currentUser && currentContact) {
-                    try {
-                        const response = await fetch(`${API_BASE_URL}/api/check-new-messages/${currentUser.id}/${currentContact.id}`);
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.success && data.hasNewMessages) {
-                                await loadMessages();
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Ошибка проверки сообщений:', error);
-                    }
-                }
-            }, 3000);
         }
         
         async function loadUsers() {
@@ -3612,391 +3206,66 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    (data.messages);
+                    renderMessages(data.messages);
                 } else {
-                    ([]);
+                    renderMessages([]);
                 }
             } catch (error) {
                 console.error('Ошибка загрузки сообщений:', error);
-                ([]);
+                renderMessages([]);
             }
         }
-
-        // function (messages) {
-        //     const messagesContainer = document.getElementById('messages-container');
-            
-        //     // Сохраняем input-area перед очисткой
-        //     const inputArea = document.querySelector('.input-area');
-            
-        //     // Временно удаляем input-area из контейнера
-        //     if (inputArea) {
-        //         inputArea.remove();
-        //     }
-            
-        //     // Очищаем только сообщения (но сохраняем welcome message)
-        //     const welcomeMessage = document.getElementById('welcome-message');
-        //     const messageElements = messagesContainer.querySelectorAll('.message, .no-messages');
-
-        //     // В цикле добавления сообщений добавьте обработку голосовых сообщений
-        //     messages.forEach(message => {
-        //         if (message.audio_url) {
-        //             const voiceMessageElement = createVoiceMessageElement(message);
-        //             messagesContainer.appendChild(voiceMessageElement);
-        //         } else {
-        //             // Обычное текстовое сообщение
-        //             const messageElement = document.createElement('div');
-        //             const isOutgoing = message.sender_id == currentUser.id;
-                    
-        //             messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
-        //             const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    
-        //             messageElement.innerHTML = `
-        //                 <div class="message-text">${escapeHtml(message.message_text)}</div>
-        //                 <div class="message-time">${messageTime}</div>
-        //             `;
-                    
-        //             messagesContainer.appendChild(messageElement);
-        //         }
-        //     });
-            
-        //     messageElements.forEach(element => {
-        //         if (element !== welcomeMessage) {
-        //             element.remove();
-        //         }
-        //     });
-            
-        //     if (!messages || messages.length === 0) {
-        //         if (!welcomeMessage) {
-        //             const noMessages = document.createElement('div');
-        //             noMessages.className = 'no-messages';
-        //             noMessages.innerHTML = '<p>Нет сообщений. Начните общение!</p>';
-        //             messagesContainer.appendChild(noMessages);
-        //         } else {
-        //             welcomeMessage.style.display = 'block';
-        //         }
-        //     } else {
-        //         // Скрываем welcome message если есть сообщения
-        //         if (welcomeMessage) {
-        //             welcomeMessage.style.display = 'none';
-        //         }
-                
-        //         // Добавляем новые сообщения
-        //         messages.forEach(message => {
-        //             const messageElement = document.createElement('div');
-        //             const isOutgoing = message.sender_id == currentUser.id;
-                    
-        //             messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
-        //             const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    
-        //             messageElement.innerHTML = `
-        //                 <div class="message-text">${escapeHtml(message.message_text)}</div>
-        //                 <div class="message-time">${messageTime}</div>
-        //             `;
-                    
-        //             messagesContainer.appendChild(messageElement);
-        //         });
-        //     }
-            
-        //     // Возвращаем input-area обратно в контейнер
-        //     if (inputArea) {
-        //         messagesContainer.appendChild(inputArea);
-        //     }
-            
-        //     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        // }
-
-        function createVoiceMessageElement(message) {
-            const messageElement = document.createElement('div');
-            const isOutgoing = message.sender_id == currentUser.id;
-            
-            messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
-            
-            messageElement.innerHTML = `
-                <div class="voice-message-container" data-audio-url="${message.audio_url}">
-                    <button class="voice-play-btn">
-                        <i class="fas fa-play"></i>
-                    </button>
-                    <div class="voice-waveform">
-                        <!-- Waveform будет сгенерирован динамически -->
-                    </div>
-                    <div class="voice-duration">${message.duration || '0'}"</div>
-                    <div class="voice-progress" style="width: 0%"></div>
-                </div>
-                <div class="message-time">${new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-            `;
-            
-            // Генерируем waveform
-            generateVoiceWaveform(messageElement, message);
-            
-            // Добавляем обработчик воспроизведения
-            setupVoiceMessagePlayback(messageElement, message);
-            
-            return messageElement;
-        }
-
+        
         function renderMessages(messages) {
             const messagesContainer = document.getElementById('messages-container');
-            if (!messagesContainer) return;
+            messagesContainer.innerHTML = '';
             
-            // Сохраняем input-area перед очисткой
+            // Сохраняем input-area
             const inputArea = messagesContainer.querySelector('.input-area');
-            
-            // Временно удаляем input-area
             if (inputArea) {
                 inputArea.remove();
             }
             
-            // Очищаем только сообщения (не трогаем welcome-message)
-            const messageElements = messagesContainer.querySelectorAll('.message, .no-messages');
-            messageElements.forEach(element => {
-                element.remove();
-            });
-            
-            // Обрабатываем welcome message
-            const welcomeMessage = document.getElementById('welcome-message');
-            if (welcomeMessage) {
-                if (messages && messages.length > 0) {
-                    welcomeMessage.style.display = 'none';
-                } else {
-                    welcomeMessage.style.display = 'block';
-                }
-            }
-            
             if (!messages || messages.length === 0) {
-                // Создаем элемент "нет сообщений" только если нет welcome message
-                if (!welcomeMessage) {
-                    const noMessages = document.createElement('div');
-                    noMessages.className = 'no-messages';
-                    noMessages.innerHTML = '<p>Нет сообщений. Начните общение!</p>';
-                    messagesContainer.appendChild(noMessages);
-                }
+                messagesContainer.innerHTML = `
+                    <div class="no-messages">
+                        <p>Нет сообщений. Начните общение!</p>
+                    </div>
+                `;
             } else {
-                // Добавляем сообщения
                 messages.forEach(message => {
-                    if (message.audio_url) {
-                        const voiceMessageElement = createVoiceMessageElement(message);
-                        messagesContainer.appendChild(voiceMessageElement);
-                    } else {
-                        const textMessageElement = createTextMessageElement(message);
-                        messagesContainer.appendChild(textMessageElement);
-                    }
+                    const messageElement = document.createElement('div');
+                    const isOutgoing = message.sender_id == currentUser.id;
+                    
+                    messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+                    const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    messageElement.innerHTML = `
+                        <div class="message-text">${escapeHtml(message.message_text)}</div>
+                        <div class="message-time">${messageTime}</div>
+                    `;
+                    
+                    messagesContainer.appendChild(messageElement);
                 });
             }
             
-            // Всегда возвращаем input-area обратно, даже если его не было
-            const currentInputArea = messagesContainer.querySelector('.input-area');
-            if (!currentInputArea && inputArea) {
+            // Возвращаем input-area
+            if (inputArea) {
                 messagesContainer.appendChild(inputArea);
             }
             
-            // Прокручиваем вниз
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
-        function generateVoiceWaveform(element, message) {
-            const waveform = element.querySelector('.voice-waveform');
-            waveform.innerHTML = '';
-            
-            const barCount = 25;
-            const duration = message.duration || 10;
-            
-            for (let i = 0; i < barCount; i++) {
-                const bar = document.createElement('div');
-                bar.className = 'wave-bar';
-                
-                // Создаем красивый waveform паттерн
-                const height = Math.sin(i / 2.5) * 12 + 15;
-                bar.style.height = height + 'px';
-                
-                // Добавляем задержку для анимации
-                bar.style.animationDelay = `${i * 0.05}s`;
-                
-                waveform.appendChild(bar);
-            }
-        }
-
-        function animateWaveform(waveformElement) {
-            const bars = waveformElement.querySelectorAll('.waveform-bar');
-            const animationDuration = 2000; // 2 секунды
-            
-            bars.forEach((bar, index) => {
-                // Создаем волнообразную анимацию
-                const delay = (index / bars.length) * animationDuration;
-                
-                setInterval(() => {
-                    const randomHeight = Math.random() * 30 + 5;
-                    bar.style.height = randomHeight + 'px';
-                    
-                    // Мигающий эффект
-                    if (Math.random() > 0.7) {
-                        bar.classList.add('active');
-                        setTimeout(() => bar.classList.remove('active'), 200);
-                    }
-                }, delay);
-            });
-        }
-        
-        async function playVoiceMessage(audioUrl) {
-            try {
-                const audio = new Audio(audioUrl);
-                audio.play().catch(e => console.error('Ошибка воспроизведения:', e));
-            } catch (error) {
-                console.error('Ошибка воспроизведения голосового сообщения:', error);
-            }
-        }
-
-        function setupVoiceMessagePlayback(element, message) {
-            const container = element.querySelector('.voice-message-container');
-            const playBtn = element.querySelector('.voice-play-btn');
-            const durationEl = element.querySelector('.voice-duration');
-            const progressBar = element.querySelector('.voice-progress');
-            const waveBars = element.querySelectorAll('.wave-bar');
-            
-            let audio = null;
-            let isPlaying = false;
-            
-            container.addEventListener('click', async function(e) {
-                if (e.target.closest('.voice-play-btn')) {
-                    e.stopPropagation();
-                    
-                    if (isPlaying) {
-                        stopPlayback();
-                    } else {
-                        await startPlayback();
-                    }
-                }
-            });
-            
-            async function startPlayback() {
-                try {
-                    stopAllVoiceMessages();
-                    
-                    if (!audio) {
-                        audio = new Audio();
-                        
-                        // Исправляем URL для HTTPS
-                        let audioUrl = message.audio_url;
-                        if (audioUrl.startsWith('http://')) {
-                            audioUrl = audioUrl.replace('http://', 'https://');
-                        }
-                        audio.src = audioUrl;
-                        
-                        audio.addEventListener('loadeddata', function() {
-                            console.log('Audio loaded successfully');
-                        });
-                        
-                        audio.addEventListener('error', function(e) {
-                            console.error('Audio error:', e, audio.error);
-                            showNotification('Ошибка', 'Не удалось загрузить аудио', 'error');
-                            stopPlayback();
-                        });
-                    }
-            
-                    await audio.play();
-                    isPlaying = true;
-                    // ... остальной код
-            
-                } catch (error) {
-                    console.error('Ошибка воспроизведения:', error);
-                    showNotification('Ошибка', 'Не удалось воспроизвести', 'error');
-                }
-            }
-            
-            function stopPlayback() {
-                if (audio) {
-                    audio.pause();
-                }
-                isPlaying = false;
-                playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                playBtn.classList.remove('playing');
-                durationEl.classList.remove('playing');
-                
-                // Останавливаем анимацию волн
-                waveBars.forEach(bar => bar.classList.remove('animated'));
-            }
-            
-            function resetPlayback() {
-                progressBar.style.width = '0%';
-                waveBars.forEach(bar => {
-                    bar.style.transform = 'scaleY(1)';
-                    bar.style.opacity = '0.7';
-                });
-            }
-            
-            function animateWaveform(currentTime, duration) {
-                const progress = currentTime / duration;
-                const activeBars = Math.floor(progress * waveBars.length);
-                
-                waveBars.forEach((bar, index) => {
-                    if (index <= activeBars) {
-                        bar.classList.add('active');
-                    } else {
-                        bar.classList.remove('active');
-                    }
-                });
-            }
-            
-            // Очистка при удалении элемента
-            element.addEventListener('DOMNodeRemoved', function() {
-                if (audio) {
-                    audio.pause();
-                    audio = null;
-                }
-            });
-        }
-        
-        // async function () {
-        //     if (!currentUser || !currentContact) return;
-            
-        //     const messageInput = document.getElementById('message-input');
-        //     const messageText = messageInput.value.trim();
-            
-        //     if (messageText === '') return;
-            
-        //     try {
-        //         const response = await fetch(`${API_BASE_URL}/api/send-message`, {
-        //             method: 'POST',
-        //             headers: {
-        //                 'Content-Type': 'application/json'
-        //             },
-        //             body: JSON.stringify({
-        //                 senderId: currentUser.id,
-        //                 receiverId: currentContact.id,
-        //                 messageText: messageText
-        //             })
-        //         });
-                
-        //         const data = await response.json();
-                
-        //         if (data.success) {
-        //             messageInput.value = '';
-        //             messageInput.style.height = 'auto';
-        //             await loadMessages();
-        //         } else {
-        //             showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-        //         }
-        //     } catch (error) {
-        //         console.error('Ошибка отправки сообщения:', error);
-        //         showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-        //     }
-        // }
-
         async function sendMessage() {
-            if (isSending) {
-                console.log('Already sending, skipping...');
-                return;
-            }
+            if (!currentUser || !currentContact) return;
             
-            isSending = true;
+            const messageInput = document.getElementById('message-input');
+            const messageText = messageInput.value.trim();
+            
+            if (messageText === '') return;
             
             try {
-                if (!currentUser || !currentContact) return;
-                
-                const messageInput = document.getElementById('message-input');
-                const messageText = messageInput.value.trim();
-                
-                if (messageText === '') return;
-                
                 const response = await fetch(`${API_BASE_URL}/api/send-message`, {
                     method: 'POST',
                     headers: {
@@ -4009,148 +3278,19 @@
                     })
                 });
                 
-                const responseData = await response.json();
+                const data = await response.json();
                 
-                if (responseData.success) {
+                if (data.success) {
                     messageInput.value = '';
                     messageInput.style.height = 'auto';
                     await loadMessages();
                 } else {
                     showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
                 }
-                
             } catch (error) {
                 console.error('Ошибка отправки сообщения:', error);
                 showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-            } finally {
-                setTimeout(() => {
-                    isSending = false;
-                }, 1000);
             }
-        }
-
-        
-        
-        // ===== ФУНКЦИИ ДЛЯ ПОИСКА ПОЛЬЗОВАТЕЛЕЙ =====
-        function openSearchModal() {
-            document.getElementById('search-modal').classList.add('active');
-            document.getElementById('user-search-input').value = '';
-            document.getElementById('user-search-input').focus();
-            clearSearchResults();
-        }
-        
-        function closeSearchModal() {
-            document.getElementById('search-modal').classList.remove('active');
-        }
-        
-        function clearSearchResults() {
-            const resultsContainer = document.getElementById('search-results');
-            resultsContainer.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-users"></i>
-                    <p>Введите имя пользователя для поиска</p>
-                </div>
-            `;
-        }
-        
-        function showSearchLoading() {
-            const resultsContainer = document.getElementById('search-results');
-            resultsContainer.innerHTML = `
-                <div class="loading-state">
-                    <div class="loader"></div>
-                    <p>Поиск пользователей...</p>
-                </div>
-            `;
-        }
-        
-        function showNoResults() {
-            const resultsContainer = document.getElementById('search-results');
-            resultsContainer.innerHTML = `
-                <div class="no-results">
-                    <i class="fas fa-search"></i>
-                    <p>Пользователи не найдены</p>
-                </div>
-            `;
-        }
-        
-        async function searchUsers(query) {
-            if (!query || query.length < 2) {
-                clearSearchResults();
-                return;
-            }
-            
-            showSearchLoading();
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/search-users?query=${encodeURIComponent(query)}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    displaySearchResults(data.users);
-                } else {
-                    showNotification('Ошибка', data.error || 'Ошибка при поиске пользователей', 'error');
-                    clearSearchResults();
-                }
-            } catch (error) {
-                console.error('Ошибка поиска пользователей:', error);
-                showNoResults();
-            }
-        }
-        
-        function displaySearchResults(users) {
-            const resultsContainer = document.getElementById('search-results');
-            
-            if (!users || users.length === 0) {
-                showNoResults();
-                return;
-            }
-            
-            resultsContainer.innerHTML = '';
-            
-            users.forEach(user => {
-                if (user.id === currentUser.id) return;
-                
-                const userElement = document.createElement('div');
-                userElement.className = 'search-result-item';
-                userElement.innerHTML = `
-                    <img src="${user.avatar || './free-icon-user-avatar-3607444.png'}" alt="Аватар" class="search-result-avatar">
-                    <div class="search-result-info">
-                        <div class="search-result-name">${user.name || user.username}</div>
-                        <div class="search-result-username">@${user.username}</div>
-                    </div>
-                `;
-                
-                userElement.addEventListener('click', () => {
-                    selectUserFromSearch(user);
-                });
-                
-                resultsContainer.appendChild(userElement);
-            });
-        }
-        
-        function selectUserFromSearch(user) {
-            closeSearchModal();
-            const existingChat = document.querySelector(`.contact-item[data-user-id="${user.id}"]`);
-            
-            if (existingChat) {
-                existingChat.click();
-            } else {
-                createNewChat(user);
-            }
-        }
-        
-        function createNewChat(user) {
-            if (!allUsers.some(u => u.id === user.id)) {
-                allUsers.push(user);
-            }
-            renderContacts();
-            selectContact(user);
-            showNotification('Чат создан', `Чат с ${user.name || user.username} успешно создан`, 'success');
         }
         
         // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
@@ -4160,150 +3300,6 @@
             return div.innerHTML;
         }
         
-        function updateProfileUI() {
-            if (!currentUser) return;
-            
-            const userCallAvatar = document.getElementById('user-call-avatar');
-            if (userCallAvatar) {
-                userCallAvatar.src = currentUser.avatar || './free-icon-user-avatar-3607444.png';
-            }
-            
-            const userName = document.getElementById('user-call-name');
-            if (userName) {
-                userName.textContent = currentUser.name || currentUser.username;
-            }
-            
-            const profileName = document.getElementById('profile-name');
-            const profileAvatar = document.getElementById('profile-avatar-img');
-            
-            if (profileName) profileName.value = currentUser.name || '';
-            if (profileAvatar) profileAvatar.src = currentUser.avatar || 'https://via.placeholder.com/150/7a64ff/ffffff?text=You';
-        }
-        
-        function handleAvatarUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            if (!file.type.match('image.*')) {
-                showNotification('Ошибка', 'Пожалуйста, выберите файл изображения', 'error');
-                return;
-            }
-            
-            if (file.size > 5 * 1024 * 1024) {
-                showNotification('Ошибка', 'Размер файла не должен превышать 5MB', 'error');
-                return;
-            }
-            
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const avatarData = e.target.result;
-                const profileAvatar = document.getElementById('profile-avatar-img');
-                if (profileAvatar) {
-                    profileAvatar.src = avatarData;
-                }
-                updateUserProfile(currentUser.name, avatarData);
-            };
-            reader.onerror = function() {
-                showNotification('Ошибка', 'Не удалось загрузить изображение', 'error');
-            };
-            reader.readAsDataURL(file);
-        }
-        
-        function removeAvatar() {
-            const defaultAvatar = 'https://via.placeholder.com/150/7a64ff/ffffff?text=' + (currentUser.name || currentUser.username).charAt(0);
-            const profileAvatar = document.getElementById('profile-avatar-img');
-            if (profileAvatar) {
-                profileAvatar.src = defaultAvatar;
-            }
-            updateUserProfile(currentUser.name, null);
-        }
-        
-        // ===== УПРАВЛЕНИЕ ФОРМАМИ =====
-        function showLoginForm() {
-            document.getElementById('auth-overlay').classList.add('active');
-            document.getElementById('login-form').style.display = 'block';
-            document.getElementById('register-form').style.display = 'none';
-        }
-        
-        function showRegisterForm() {
-            document.getElementById('auth-overlay').classList.add('active');
-            document.getElementById('login-form').style.display = 'none';
-            document.getElementById('register-form').style.display = 'block';
-        }
-        
-        function hideLoginForm() {
-            document.getElementById('auth-overlay').classList.remove('active');
-        }
-        
-        function showProfileSettings() {
-            if (!currentUser) {
-                showNotification('Ошибка', 'Вы должны быть авторизованы', 'error');
-                return;
-            }
-            document.getElementById('profile-overlay').classList.add('active');
-            document.getElementById('profile-name').value = currentUser.name || '';
-            document.getElementById('profile-avatar-img').src = currentUser.avatar || 'https://via.placeholder.com/150/7a64ff/ffffff?text=You';
-        }
-        
-        function hideProfileSettings() {
-            document.getElementById('profile-overlay').classList.remove('active');
-        }
-        
-        function handleLogin() {
-            const username = document.getElementById('login-username').value.trim();
-            const password = document.getElementById('login-password').value;
-            
-            if (!username || !password) {
-                showNotification('Ошибка', 'Заполните все поля', 'error');
-                return;
-            }
-            loginUser(username, password);
-        }
-        
-        function handleRegister() {
-            const username = document.getElementById('register-username').value.trim();
-            const password = document.getElementById('register-password').value;
-            const confirmPassword = document.getElementById('register-confirm-password').value;
-            const name = document.getElementById('register-name').value.trim() || username;
-            
-            if (!username || !password) {
-                showNotification('Ошибка', 'Имя пользователя и пароль обязательны', 'error');
-                return;
-            }
-            if (username.length < 3) {
-                showNotification('Ошибка', 'Имя пользователя должно содержать至少 3 символа', 'error');
-                return;
-            }
-            if (password.length < 6) {
-                showNotification('Ошибка', 'Пароль должен содержать至少 6 символов', 'error');
-                return;
-            }
-            if (password !== confirmPassword) {
-                showNotification('Ошибка', 'Пароли не совпадают', 'error');
-                return;
-            }
-            registerUser(username, password, name);
-        }
-        
-        async function saveProfileSettings() {
-            const newName = document.getElementById('profile-name').value.trim();
-            const success = await updateUserProfile(newName, currentUser.avatar);
-            if (success) {
-                hideProfileSettings();
-            }
-        }
-        
-        function showLoader(type) {
-            document.getElementById(`${type}-loader`).style.display = 'block';
-            document.getElementById(`${type}-btn`).disabled = true;
-        }
-        
-        function hideLoader(type) {
-            document.getElementById(`${type}-loader`).style.display = 'none';
-            document.getElementById(`${type}-btn`).disabled = false;
-        }
-        
-        // ===== УПРАВЛЕНИЕ УВЕДОМЛЕНИЯМИ =====
         function showNotification(title, text, type = 'info') {
             const notification = document.getElementById('notification');
             const notificationTitle = document.getElementById('notification-title');
@@ -4337,302 +3333,414 @@
         function hideNotification() {
             document.getElementById('notification').classList.remove('active');
         }
-
-        function removeEventListeners() {
-            // Создаем новые элементы (клонируем и заменяем) чтобы сбросить обработчики
-            const sendBtn = document.getElementById('send-btn');
-            const messageInput = document.getElementById('message-input');
-            const voiceBtn = document.getElementById('voice-message-btn');
+        
+        function showLoginForm() {
+            document.getElementById('auth-overlay').classList.add('active');
+        }
+        
+        function startMessageChecking() {
+            messageCheckInterval = setInterval(async () => {
+                if (currentUser && currentContact) {
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/check-new-messages/${currentUser.id}/${currentContact.id}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success && data.hasNewMessages) {
+                                await loadMessages();
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Ошибка проверки сообщений:', error);
+                    }
+                }
+            }, 3000);
+        }
+        
+        function connectWebSocket() {
+            if (!currentUser) return;
             
-            if (sendBtn) {
-                const newSendBtn = sendBtn.cloneNode(true);
-                sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
-            }
-            
-            if (messageInput) {
-                const newMessageInput = messageInput.cloneNode(true);
-                messageInput.parentNode.replaceChild(newMessageInput, messageInput);
-            }
-            
-            if (voiceBtn) {
-                const newVoiceBtn = voiceBtn.cloneNode(true);
-                voiceBtn.parentNode.replaceChild(newVoiceBtn, voiceBtn);
+            try {
+                websocket = new WebSocket(`${WS_URL}?userId=${currentUser.id}`);
+                
+                websocket.onopen = () => {
+                    console.log('WebSocket connected');
+                };
+                
+                websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.error('WebSocket message parse error:', error);
+                    }
+                };
+                
+                websocket.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    setTimeout(connectWebSocket, 3000);
+                };
+                
+                websocket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+                
+            } catch (error) {
+                console.error('WebSocket connection error:', error);
+                setTimeout(connectWebSocket, 3000);
             }
         }
 
-        function handleMessageInputKeypress(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        }
-
-        function handleVoiceMessageClick() {
-            if (this.classList.contains('recording')) {
-                stopVoiceRecording();
-            } else {
-                startVoiceRecording();
-            }
-        }
-        
-        
-        // Убираем старый код и используем простые обработчики
-        function setupEventListeners() {
-            if (eventListenersInitialized) {
-                console.log('Обработчики уже настроены');
-                return;
-            }
-        
-            console.log('Настройка обработчиков событий...');
-        
-            // Полностью очищаем все старые обработчики
-            const elementsToReset = [
-                'send-btn',
-                'voice-message-btn', 
-                'message-input',
-                'cancel-recording',
-                'send-recording',
-                'call-btn',
-                'end-call-btn',
-                'mute-btn',
-                'accept-call',
-                'reject-call'
-            ];
-        
-            elementsToReset.forEach(id => {
-                const element = document.getElementById(id);
-                if (element && element.parentNode) {
-                    const clone = element.cloneNode(true);
-                    element.parentNode.replaceChild(clone, element);
-                }
-            });
-        
-            // Делегирование событий для надежности
-            document.addEventListener('click', function(e) {
-                // Голосовое сообщение
-                if (e.target.closest('#voice-message-btn')) {
-                    e.preventDefault();
-                    handleVoiceMessage(e);
-                    return;
-                }
-        
-                // Отправка текстового сообщения
-                if (e.target.closest('#send-btn')) {
-                    e.preventDefault();
-                    sendMessage();
-                    return;
-                }
-        
-                // Отмена записи
-                if (e.target.closest('#cancel-recording')) {
-                    e.preventDefault();
-                    cancelRecording();
-                    return;
-                }
-        
-                // Отправка голосового сообщения
-                if (e.target.closest('#send-recording')) {
-                    e.preventDefault();
-                    sendVoiceMessage();
-                    return;
-                }
-        
-                // Звонок
-                if (e.target.closest('#call-btn')) {
-                    e.preventDefault();
-                    startCall();
-                    return;
-                }
-        
-                // Завершение звонка
-                if (e.target.closest('#end-call-btn')) {
-                    e.preventDefault();
-                    endCall();
-                    return;
-                }
-        
-                // Отключение микрофона
-                if (e.target.closest('#mute-btn')) {
-                    e.preventDefault();
-                    toggleMute();
-                    return;
-                }
-        
-                // Принятие звонка
-                if (e.target.closest('#accept-call')) {
-                    e.preventDefault();
-                    acceptCall();
-                    return;
-                }
-        
-                // Отклонение звонка
-                if (e.target.closest('#reject-call')) {
-                    e.preventDefault();
+        async function handleIncomingCall(data) {
+            const { callerId, offer, callerName, callerAvatar, callId } = data;
+            
+            // Сохраняем данные звонка
+            window.incomingOffer = offer;
+            window.incomingCallerId = callerId;
+            window.incomingCallId = callId;
+            
+            // Показываем модалку входящего звонка
+            document.getElementById('caller-name').textContent = callerName || 'Неизвестный';
+            document.getElementById('caller-avatar').src = callerAvatar || './free-icon-user-avatar-3607444.png';
+            document.getElementById('incoming-call-modal').classList.add('active');
+            
+            // Проигрываем звук звонка
+            playRingtone();
+            
+            // Автоматически отклоняем звонок через 30 секунд
+            clearTimeout(window.callTimeout);
+            window.callTimeout = setTimeout(() => {
+                if (document.getElementById('incoming-call-modal').classList.contains('active')) {
                     rejectCall();
-                    return;
+                    showNotification('Звонок', 'Входящий звонок пропущен', 'info');
                 }
-            });
-        
-            // Обработчик клавиатуры для поля ввода
-            const messageInput = document.getElementById('message-input');
-            if (messageInput) {
-                messageInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage();
-                    }
-                });
-        
-                // Автоматическое изменение высоты
-                messageInput.addEventListener('input', function() {
-                    this.style.height = 'auto';
-                    this.style.height = (this.scrollHeight) + 'px';
-                });
-            }
-        
-            // Обработчики для аутентификации
-            document.getElementById('login-btn')?.addEventListener('click', handleLogin);
-            document.getElementById('register-btn')?.addEventListener('click', handleRegister);
-            document.getElementById('show-register')?.addEventListener('click', showRegisterForm);
-            document.getElementById('show-login')?.addEventListener('click', showLoginForm);
-            document.getElementById('profile-btn')?.addEventListener('click', showProfileSettings);
-            document.getElementById('logout-btn')?.addEventListener('click', logoutUser);
-            document.getElementById('profile-cancel')?.addEventListener('click', hideProfileSettings);
-            document.getElementById('profile-save')?.addEventListener('click', saveProfileSettings);
-            document.getElementById('close-notification')?.addEventListener('click', hideNotification);
-            document.getElementById('close-search-modal')?.addEventListener('click', closeSearchModal);
-        
-            // Обработчики для поиска
-            document.getElementById('contact-search')?.addEventListener('input', function(e) {
-                const searchTerm = e.target.value.toLowerCase();
-                const contactItems = document.querySelectorAll('.contact-item');
-                
-                contactItems.forEach(item => {
-                    const contactName = item.querySelector('.contact-name')?.textContent.toLowerCase();
-                    if (contactName && contactName.includes(searchTerm)) {
-                        item.style.display = 'flex';
-                    } else {
-                        item.style.display = 'none';
-                    }
-                });
-            });
-        
-            eventListenersInitialized = true;
-            console.log('Все обработчики событий настроены');
-        }
-
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+            }, 30000);
         }
         
-        function handleVoiceMessage(event) {
-            const btn = event.target.closest('#voice-message-btn');
+        async function handleCallAnswered(data) {
+            const { answer, callId } = data;
             
-            if (!btn) {
-                console.error('Кнопка голосового сообщения не найдена');
+            if (peerConnection && isCaller && callId === currentCallId) {
+                try {
+                    if (peerConnection.signalingState !== 'have-local-offer') {
+                        setTimeout(() => handleCallAnswered(data), 1000);
+                        return;
+                    }
+                    
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                    console.log('Remote description (answer) set successfully');
+                    showNotification('Звонок', 'Собеседник ответил на звонок', 'success');
+                    stopRingtone();
+                    
+                } catch (error) {
+                    console.error('Error setting remote description:', error);
+                    setTimeout(() => handleCallAnswered(data), 1000);
+                }
+            }
+        }
+        
+        async function handleIceCandidate(data) {
+            const { candidate, callId } = data;
+            
+            if (callId !== currentCallId) return;
+            
+            if (peerConnection && candidate) {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (error) {
+                    pendingIceCandidates.push(candidate);
+                }
+            } else {
+                pendingIceCandidates.push(candidate);
+            }
+        }
+        
+        function handleCallRejected() {
+            endCall();
+            showNotification('Звонок', 'Собеседник отклонил ваш звонок', 'info');
+            stopRingtone();
+        }
+        
+        function handleCallEnded() {
+            endCall();
+            showNotification('Звонок', 'Собеседник завершил звонок', 'info');
+            stopRingtone();
+        }
+        
+        function handleCallError(data) {
+            endCall();
+            showNotification('Ошибка звонка', data.message || 'Не удалось установить соединение', 'error');
+            stopRingtone();
+        }
+        
+        async function acceptCall() {
+            if (!window.incomingOffer) {
+                showNotification('Ошибка', 'Нет входящего звонка', 'error');
+                return;
+            }
+            
+            try {
+                audioStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    },
+                    video: false 
+                });
+                
+                startAudioAnalysis();
+                await initializeWebRTC();
+                
+                isCaller = false;
+                currentCallId = window.incomingCallId;
+                
+                console.log('Setting remote offer...');
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
+                console.log('Remote offer set successfully');
+                
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                console.log('Local description (answer) set');
+                
+                websocket.send(JSON.stringify({
+                    type: 'call-answer',
+                    callerId: window.incomingCallerId,
+                    answer: answer,
+                    callId: currentCallId
+                }));
+                
+                document.getElementById('incoming-call-modal').classList.remove('active');
+                showCallInterface();
+                showNotification('Звонок', 'Соединение установлено', 'success');
+                stopRingtone();
+                
+            } catch (error) {
+                console.error('Ошибка принятия звонка:', error);
+                showNotification('Ошибка', 'Не удалось принять звонок', 'error');
+            }
+        }
+        
+        function rejectCall() {
+            if (websocket && window.incomingCallerId) {
+                websocket.send(JSON.stringify({
+                    type: 'reject-call',
+                    callerId: window.incomingCallerId,
+                    callId: window.incomingCallId
+                }));
+            }
+            
+            document.getElementById('incoming-call-modal').classList.remove('active');
+            window.incomingOffer = null;
+            window.incomingCallerId = null;
+            window.incomingCallId = null;
+            stopRingtone();
+        }
+        
+        function handleWebSocketMessage(data) {
+            console.log('WebSocket message received:', data.type);
+            
+            switch (data.type) {
+                case 'incoming-call':
+                    handleIncomingCall(data);
+                    break;
+                case 'call-answered':
+                    handleCallAnswered(data);
+                    break;
+                case 'ice-candidate':
+                    handleIceCandidate(data);
+                    break;
+                case 'call-rejected':
+                    handleCallRejected();
+                    break;
+                case 'call-ended':
+                    handleCallEnded();
+                    break;
+                case 'call-error':
+                    handleCallError(data);
+                    break;
+            }
+        }
+        
+        // ===== WEBRTC ФУНКЦИИ (если нужны) =====
+        async function startCall() {
+            if (!currentContact) {
+                showNotification('Ошибка', 'Выберите собеседника для звонка', 'error');
+                return;
+            }
+            
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                showNotification('Ошибка', 'Нет соединения с сервером', 'error');
                 return;
             }
         
-            if (btn.classList.contains('recording')) {
-                stopVoiceRecording();
-            } else {
-                startVoiceRecording();
+            const callTimeout = setTimeout(() => {
+                if (isCallActive && peerConnection && peerConnection.connectionState !== 'connected') {
+                    console.log('Call timeout - ending call');
+                    endCall();
+                    showNotification('Ошибка', 'Не удалось установить соединение', 'error');
+                }
+            }, 15000);
+        
+            try {
+                // Получаем медиапоток
+                audioStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    },
+                    video: false 
+                });
+                
+                // Запускаем анализ аудио
+                startAudioAnalysis();
+                
+                // Инициализируем WebRTC
+                await initializeWebRTC();
+                
+                isCaller = true;
+                currentCallId = Date.now().toString();
+                
+                // Создаем offer
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: false
+                });
+                
+                // Сначала устанавливаем локальное описание
+                await peerConnection.setLocalDescription(offer);
+                console.log('Local description (offer) set');
+                
+                // Затем отправляем offer
+                websocket.send(JSON.stringify({
+                    type: 'call-offer',
+                    targetUserId: currentContact.id,
+                    offer: offer,
+                    callerName: currentUser.name || currentUser.username,
+                    callerAvatar: currentUser.avatar || './free-icon-user-avatar-3607444.png',
+                    callId: currentCallId
+                }));
+                
+                // Показываем интерфейс звонка
+                showCallInterface();
+                showNotification('Звонок', 'Вызываем собеседника...', 'info');
+                
+                // Очищаем таймаут при успешном соединении
+                const checkConnection = setInterval(() => {
+                    if (peerConnection && peerConnection.connectionState === 'connected') {
+                        clearTimeout(callTimeout);
+                        clearInterval(checkConnection);
+                    } else if (peerConnection && peerConnection.connectionState === 'failed') {
+                        clearTimeout(callTimeout);
+                        clearInterval(checkConnection);
+                        endCall();
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                clearTimeout(callTimeout);
+                console.error('Ошибка начала звонка:', error);
+                showNotification('Ошибка', 'Не удалось начать звонок: ' + error.message, 'error');
             }
         }
         
-        // Настройка делегирования событий (самое надежное решение)
-        function setupEventDelegation() {
-            // Делегирование кликов
-            document.addEventListener('click', function(e) {
-                // Отправка сообщения
-                if (e.target.closest('#send-btn') || e.target.id === 'send-btn') {
-                    e.preventDefault();
-                    sendMessage();
-                    return;
+        function endCall() {
+            console.log('Ending call');
+            
+            // Отправляем сообщение о завершении звонка
+            if (websocket && currentCallId) {
+                const targetId = isCaller ? currentContact.id : window.incomingCallerId;
+                if (targetId) {
+                    websocket.send(JSON.stringify({
+                        type: 'end-call',
+                        targetUserId: targetId,
+                        callId: currentCallId
+                    }));
                 }
-                
-                // Голосовое сообщение
-                if (e.target.closest('#voice-message-btn') || e.target.id === 'voice-message-btn') {
-                    e.preventDefault();
-                    const btn = e.target.closest('#voice-message-btn') || e.target;
-                    handleVoiceMessage(btn);
-                    return;
-                }
-                
-                // Отмена записи
-                if (e.target.closest('#cancel-recording') || e.target.id === 'cancel-recording') {
-                    e.preventDefault();
-                    cancelRecording();
-                    return;
-                }
-                
-                // Отправка записи
-                if (e.target.closest('#send-recording') || e.target.id === 'send-recording') {
-                    e.preventDefault();
-                    sendVoiceMessage();
-                    return;
-                }
-            }, true); // Используем capture phase
-        
-            // Обработка клавиатуры
-            document.addEventListener('keypress', function(e) {
-                if (e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            }, true);
+            }
+            
+            // Останавливаем анализ аудио
+            stopAudioAnalysis();
+            stopRemoteAudioAnalysis();
+            
+            // Закрываем соединение
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            // Останавливаем медиапоток
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
+            }
+            
+            // Сбрасываем состояние
+            isCallActive = false;
+            isCaller = false;
+            currentCallId = null;
+            window.incomingOffer = null;
+            window.incomingCallerId = null;
+            window.incomingCallId = null;
+            pendingIceCandidates = [];
+            
+            // Скрываем интерфейс звонка
+            document.getElementById('call-container').classList.remove('active');
+            document.getElementById('incoming-call-modal').classList.remove('active');
+            
+            stopRingtone();
+            clearTimeout(window.callTimeout);
+            
+            // Восстанавливаем нормальный интерфейс
+            document.getElementById('message-input').disabled = !currentContact;
+            document.getElementById('send-btn').disabled = !currentContact;
+            
+            showNotification('Звонок', 'Звонок завершен', 'info');
         }
         
-        // Обработчик голосовых сообщений
-        function handleVoiceMessage(button) {
-            if (button.classList.contains('recording')) {
-                stopVoiceRecording();
-            } else {
-                startVoiceRecording();
+        // ===== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ =====
+        function updateProfileUI() {
+            if (!currentUser) return;
+            
+            const userCallAvatar = document.getElementById('user-call-avatar');
+            if (userCallAvatar) {
+                userCallAvatar.src = currentUser.avatar || './free-icon-user-avatar-3607444.png';
+            }
+            
+            const userName = document.getElementById('user-call-name');
+            if (userName) {
+                userName.textContent = currentUser.name || currentUser.username;
             }
         }
-                
-        // ===== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ АУДИО =====
-        function testMicrophone() {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    const audio = new Audio();
-                    audio.srcObject = stream;
-                    audio.play();
-                    setTimeout(() => {
-                        stream.getTracks().forEach(track => track.stop());
-                    }, 3000);
-                })
-                .catch(error => {
-                    console.error('Microphone test failed:', error);
-                });
+        
+        function logoutUser() {
+            currentUser = null;
+            localStorage.removeItem('fuzionprime_current_user');
+            
+            if (messageCheckInterval) {
+                clearInterval(messageCheckInterval);
+                messageCheckInterval = null;
+            }
+            
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+            
+            if (isCallActive) {
+                endCall();
+            }
+            
+            showLoginForm();
+            showNotification('Выход', 'Вы вышли из системы', 'info');
         }
         
-        function checkAudioPermissions() {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    stream.getTracks().forEach(track => track.stop());
-                    console.log('Audio permissions granted');
-                })
-                .catch(error => {
-                    console.error('Audio permissions denied:', error);
-                    showNotification('Ошибка', 'Разрешите доступ к микрофону для звонков', 'error');
-                });
-        }
-        
-        // Проверяем разрешения при загрузке
-        setTimeout(checkAudioPermissions, 1000);
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, initializing...');
-            checkAuthStatus();
-            setupEventListeners();
-        });
+        // ===== ЗАВЕРШЕНИЕ СКРИПТА =====
+        console.log('Messenger JavaScript loaded');
     </script>
 </body>
 </html>
+
 
 
 
