@@ -2501,60 +2501,46 @@
         }
         
         async function sendVoiceMessage() {
-            console.log('sendVoiceMessage called', new Date().toISOString());
-            if (isSending) {
-                console.log('Blocked duplicate sendVoiceMessage');
-                return;
-            }
-            
-            if (isSending) {
-                console.log('Already sending voice, skipping...');
-                return;
-            }
-            
+            if (isSending) return;
             isSending = true;
         
             try {
-                // Создаем Blob из записанных данных
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
-                
-                // Создаем FormData для отправки
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'voice-message.webm');
                 formData.append('senderId', currentUser.id);
                 formData.append('receiverId', currentContact.id);
                 formData.append('duration', Math.floor((Date.now() - recordingStartTime) / 1000));
         
-                // Отправляем на сервер
                 const response = await fetch(`${API_BASE_URL}/api/send-voice-message`, {
                     method: 'POST',
                     body: formData
                 });
+        
+                const responseText = await response.text();
+                let responseData;
                 
-                const data = await response.json();
-                
-                if (data.success) {
-                    showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
-                    await loadMessages(); // Обновляем чат
-                } else {
-                    showNotification('Ошибка', data.error || 'Не удалось отправить голосовое сообщение', 'error');
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch (e) {
+                    throw new Error('Invalid JSON response: ' + responseText);
                 }
         
-                const responseData = await response.json(); // Переименовываем переменную
-
                 if (responseData.success) {
                     showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
+                    stopRecordingAndCleanup();
                     await loadMessages();
                 } else {
-                    showNotification('Ошибка', responseData.error || 'Не удалось отправить голосовое сообщение', 'error');
+                    showNotification('Ошибка', responseData.error, 'error');
                 }
         
             } catch (error) {
                 console.error('Ошибка отправки голосового сообщения:', error);
-                showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
+                showNotification('Ошибка', 'Ошибка при отправке', 'error');
             } finally {
                 setTimeout(() => {
                     isSending = false;
+                    audioChunks = [];
                 }, 1000);
             }
         }
@@ -3900,57 +3886,23 @@
             });
         }
         
-        // async function sendMessage() {
-        //     if (!currentUser || !currentContact) return;
-            
-        //     const messageInput = document.getElementById('message-input');
-        //     const messageText = messageInput.value.trim();
-            
-        //     if (messageText === '') return;
-            
-        //     try {
-        //         const response = await fetch(`${API_BASE_URL}/api/send-message`, {
-        //             method: 'POST',
-        //             headers: {
-        //                 'Content-Type': 'application/json'
-        //             },
-        //             body: JSON.stringify({
-        //                 senderId: currentUser.id,
-        //                 receiverId: currentContact.id,
-        //                 messageText: messageText
-        //             })
-        //         });
-                
-        //         const data = await response.json();
-                
-        //         if (data.success) {
-        //             messageInput.value = '';
-        //             messageInput.style.height = 'auto';
-        //             await loadMessages();
-        //         } else {
-        //             showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-        //         }
-        //     } catch (error) {
-        //         console.error('Ошибка отправки сообщения:', error);
-        //         showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-        //     }
-        // }
-
+        
         async function sendMessage() {
-            console.log('sendMessage called', new Date().toISOString());
-            if (isSending) {
-                console.log('Blocked duplicate sendMessage');
-                return;
-            }
-            
             if (isSending) {
                 console.log('Already sending, skipping...');
                 return;
             }
             
             isSending = true;
-
+            
             try {
+                if (!currentUser || !currentContact) return;
+                
+                const messageInput = document.getElementById('message-input');
+                const messageText = messageInput.value.trim();
+                
+                if (messageText === '') return;
+                
                 const response = await fetch(`${API_BASE_URL}/api/send-message`, {
                     method: 'POST',
                     headers: {
@@ -3963,27 +3915,25 @@
                     })
                 });
                 
-                const data = await response.json();
+                const responseData = await response.json();
                 
-                if (data.success) {
+                if (responseData.success) {
                     messageInput.value = '';
                     messageInput.style.height = 'auto';
                     await loadMessages();
                 } else {
                     showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
                 }
+                
             } catch (error) {
                 console.error('Ошибка отправки сообщения:', error);
                 showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-            }
-            
             } finally {
                 setTimeout(() => {
                     isSending = false;
-                }, 1000); // Задержка перед следующей отправкой
+                }, 1000);
             }
         }
-
         
         
         // ===== ФУНКЦИИ ДЛЯ ПОИСКА ПОЛЬЗОВАТЕЛЕЙ =====
@@ -4608,3 +4558,4 @@
     </script>
 </body>
 </html>
+
