@@ -3289,54 +3289,118 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    renderMessages(data.messages);
+                    (data.messages);
                 } else {
-                    renderMessages([]);
+                    ([]);
                 }
             } catch (error) {
                 console.error('Ошибка загрузки сообщений:', error);
-                renderMessages([]);
+                ([]);
             }
         }
-        
-        function renderMessages(messages) {
-            const messagesContainer = document.getElementById('messages-container');
-            messagesContainer.innerHTML = '';
+
+        function reinitializeInputAreaListeners() {
+            // Переинициализируем обработчики для input-area
+            const messageInput = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-btn');
+            const voiceBtn = document.getElementById('voice-message-btn');
             
-            // Сохраняем input-area
-            const inputArea = messagesContainer.querySelector('.input-area');
-            if (inputArea) {
-                inputArea.remove();
-            }
-            
-            if (!messages || messages.length === 0) {
-                messagesContainer.innerHTML = `
-                    <div class="no-messages">
-                        <p>Нет сообщений. Начните общение!</p>
-                    </div>
-                `;
-            } else {
-                messages.forEach(message => {
-                    const messageElement = document.createElement('div');
-                    const isOutgoing = message.sender_id == currentUser.id;
-                    
-                    messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
-                    const messageTime = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    
-                    messageElement.innerHTML = `
-                        <div class="message-text">${escapeHtml(message.message_text)}</div>
-                        <div class="message-time">${messageTime}</div>
-                    `;
-                    
-                    messagesContainer.appendChild(messageElement);
+            if (messageInput) {
+                // Обработчик клавиатуры
+                messageInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                    }
+                });
+                
+                // Автоматическое изменение высоты
+                messageInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
                 });
             }
             
-            // Возвращаем input-area
-            if (inputArea) {
-                messagesContainer.appendChild(inputArea);
+            if (sendBtn) {
+                sendBtn.addEventListener('click', sendMessage);
             }
             
+            if (voiceBtn) {
+                voiceBtn.addEventListener('click', function() {
+                    if (this.classList.contains('recording')) {
+                        stopVoiceRecording();
+                    } else {
+                        startVoiceRecording();
+                    }
+                });
+            }
+}
+        
+        function renderMessages(messages) {
+            const messagesContainer = document.getElementById('messages-container');
+            if (!messagesContainer) return;
+            
+            // Сохраняем input-area перед очисткой
+            const inputArea = messagesContainer.querySelector('.input-area');
+            const welcomeMessage = document.getElementById('welcome-message');
+            
+            // Сохраняем HTML input-area чтобы восстановить позже
+            let inputAreaHTML = '';
+            if (inputArea) {
+                inputAreaHTML = inputArea.outerHTML;
+                inputArea.remove();
+            }
+            
+            // Сохраняем HTML welcome message
+            let welcomeMessageHTML = '';
+            if (welcomeMessage) {
+                welcomeMessageHTML = welcomeMessage.outerHTML;
+                welcomeMessage.remove();
+            }
+            
+            // Очищаем контейнер (теперь input-area и welcome message уже удалены)
+            messagesContainer.innerHTML = '';
+            
+            // Восстанавливаем welcome message если нет сообщений
+            if (!messages || messages.length === 0) {
+                if (welcomeMessageHTML) {
+                    messagesContainer.innerHTML = welcomeMessageHTML;
+                    document.getElementById('welcome-message').style.display = 'block';
+                } else {
+                    messagesContainer.innerHTML = `
+                        <div class="no-messages">
+                            <p>Нет сообщений. Начните общение!</p>
+                        </div>
+                    `;
+                }
+            } else {
+                // Скрываем welcome message если есть сообщения
+                if (welcomeMessageHTML) {
+                    messagesContainer.innerHTML = welcomeMessageHTML;
+                    document.getElementById('welcome-message').style.display = 'none';
+                }
+                
+                // Добавляем сообщения
+                messages.forEach(message => {
+                    if (message.audio_url) {
+                        const voiceMessageElement = createVoiceMessageElement(message);
+                        messagesContainer.appendChild(voiceMessageElement);
+                    } else {
+                        const textMessageElement = createTextMessageElement(message);
+                        messagesContainer.appendChild(textMessageElement);
+                    }
+                });
+            }
+            
+            // Всегда восстанавливаем input-area в конец
+            if (inputAreaHTML) {
+                messagesContainer.insertAdjacentHTML('beforeend', inputAreaHTML);
+                
+                // Переинициализируем обработчики для восстановленного input-area
+                reinitializeInputAreaListeners();
+            }
+            
+            // Прокручиваем вниз
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
@@ -3823,6 +3887,7 @@
     </script>
 </body>
 </html>
+
 
 
 
