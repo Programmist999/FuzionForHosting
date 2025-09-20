@@ -4413,7 +4413,9 @@
         }
         
         function handleVoiceMessage() {
+            // Получаем кнопку явно, а не через this
             const btn = document.getElementById('voice-message-btn');
+            
             if (!btn) {
                 console.error('Voice message button not found');
                 return;
@@ -4511,4 +4513,5 @@
     </script>
 </body>
 </html>
+
 
