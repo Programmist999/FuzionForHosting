@@ -4384,50 +4384,77 @@
         
         // Убираем старый код и используем простые обработчики
         function setupEventListeners() {
-            if (eventListenersInitialized) return;
+            if (eventListenersInitialized) {
+                console.log('Обработчики уже настроены');
+                return;
+            }
             
-            // Удаляем старые обработчики путем замены элементов
-            replaceElementWithClone('send-btn');
-            replaceElementWithClone('voice-message-btn');
-            replaceElementWithClone('message-input');
-            replaceElementWithClone('cancel-recording');
-            replaceElementWithClone('send-recording');
-        
-            // Добавляем обработчики на новые элементы
-            document.getElementById('send-btn')?.addEventListener('click', sendMessage);
-            document.getElementById('voice-message-btn')?.addEventListener('click', handleVoiceMessage); // ← Просто передаем функцию
-            document.getElementById('cancel-recording')?.addEventListener('click', cancelRecording);
-            document.getElementById('send-recording')?.addEventListener('click', sendVoiceMessage);
+            console.log('Настраиваем обработчики событий...');
             
-            // Обработчик клавиатуры
-            document.getElementById('message-input')?.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
+            // Используем делегирование событий вместо прямых обработчиков
+            document.addEventListener('click', function(e) {
+                // Голосовое сообщение
+                if (e.target.closest('#voice-message-btn')) {
+                    handleVoiceMessage(e);
+                    return;
+                }
+                
+                // Отправка текстового сообщения
+                if (e.target.closest('#send-btn')) {
                     sendMessage();
+                    return;
+                }
+                
+                // Отмена записи
+                if (e.target.closest('#cancel-recording')) {
+                    cancelRecording();
+                    return;
+                }
+                
+                // Отправка голосового сообщения
+                if (e.target.closest('#send-recording')) {
+                    sendVoiceMessage();
+                    return;
                 }
             });
-        
+            
+            // Обработчик клавиатуры
+            const messageInput = document.getElementById('message-input');
+            if (messageInput) {
+                messageInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                    }
+                });
+            }
+            
             eventListenersInitialized = true;
-            console.log('Event listeners initialized');
+            console.log('Обработчики событий настроены');
         }
+        
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
         
-        function handleVoiceMessage() {
-            // Явно находим кнопку, а не используем this
-            const btn = document.getElementById('voice-message-btn');
+        function handleVoiceMessage(event) {
+            // Используем event.target для надежности
+            const btn = event.target.closest('#voice-message-btn') || document.getElementById('voice-message-btn');
             
             if (!btn) {
                 console.error('Кнопка голосового сообщения не найдена');
                 return;
             }
             
+            console.log('Кнопка найдена, классы:', btn.classList.toString());
+            
             if (btn.classList.contains('recording')) {
+                console.log('Останавливаем запись');
                 stopVoiceRecording();
             } else {
+                console.log('Начинаем запись');
                 startVoiceRecording();
             }
         }
@@ -4517,6 +4544,7 @@
     </script>
 </body>
 </html>
+
 
 
 
