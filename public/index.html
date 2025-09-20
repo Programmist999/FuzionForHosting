@@ -2403,38 +2403,6 @@
             }
         }
 
-        function stopRecordingAndCleanup() {
-            // Останавливаем медиарекордер
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            }
-            
-            // Останавливаем таймер
-            if (recordingTimer) {
-                clearInterval(recordingTimer);
-                recordingTimer = null;
-            }
-            
-            // Останавливаем визуализатор
-            if (visualizerInterval) {
-                clearInterval(visualizerInterval);
-                visualizerInterval = null;
-            }
-            
-            // Закрываем медиапоток
-            if (audioStream) {
-                audioStream.getTracks().forEach(track => track.stop());
-                audioStream = null;
-            }
-            
-            // Обновляем UI
-            document.getElementById('voice-recorder').classList.remove('active');
-            document.getElementById('voice-message-btn').classList.remove('recording');
-            
-            // Сбрасываем флаги
-            isRecording = false;
-        }
-
         function stopAllVoiceMessages() {
             if (currentPlayingAudio) {
                 currentPlayingAudio.pause();
@@ -2528,8 +2496,9 @@
         }
         
         function cancelRecording() {
-            stopVoiceRecording();
+            stopRecordingAndCleanup();
             audioChunks = [];
+            showNotification('Инфо', 'Запись отменена', 'info');
         }
         
         async function sendVoiceMessage() {
@@ -2575,6 +2544,31 @@
                     audioChunks = [];
                 }, 1000);
             }
+        }
+        function stopRecordingAndCleanup() {
+            // Останавливаем медиарекордер
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            
+            // Останавливаем таймер
+            stopRecordingTimer();
+            
+            // Останавливаем визуализатор
+            stopAudioVisualizer();
+            
+            // Закрываем медиапоток
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
+            }
+            
+            // Обновляем UI
+            document.getElementById('voice-recorder').classList.remove('active');
+            document.getElementById('voice-message-btn').classList.remove('recording');
+            
+            // Сбрасываем флаги
+            isRecording = false;
         }
         
         // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
@@ -3119,6 +3113,15 @@
             document.getElementById('send-btn').disabled = !currentContact;
             
             showNotification('Звонок', 'Звонок завершен', 'info');
+        }
+
+        function replaceElementWithClone(elementId) {
+            const element = document.getElementById(elementId);
+            if (element && element.parentNode) {
+                const clone = element.cloneNode(true);
+                element.parentNode.replaceChild(clone, element);
+                console.log('Element replaced:', elementId);
+            }
         }
         
         function checkConnectionStatus() {
@@ -3836,42 +3839,35 @@
             async function startPlayback() {
                 try {
                     stopAllVoiceMessages();
+                    
                     if (!audio) {
-                        audio = new Audio(message.audio_url);
-                        currentPlayingAudio = audio;
-                        currentPlayingElement = element;
+                        audio = new Audio();
                         
-                        audio.addEventListener('timeupdate', function() {
-                            const progress = (audio.currentTime / audio.duration) * 100;
-                            progressBar.style.width = progress + '%';
-                            
-                            // Анимируем волны в соответствии с воспроизведением
-                            animateWaveform(audio.currentTime, audio.duration);
+                        // Исправляем URL для HTTPS
+                        let audioUrl = message.audio_url;
+                        if (audioUrl.startsWith('http://')) {
+                            audioUrl = audioUrl.replace('http://', 'https://');
+                        }
+                        audio.src = audioUrl;
+                        
+                        audio.addEventListener('loadeddata', function() {
+                            console.log('Audio loaded successfully');
                         });
                         
-                        audio.addEventListener('ended', function() {
-                            stopPlayback();
-                            resetPlayback();
-                        });
-                        
-                        audio.addEventListener('error', function() {
-                            showNotification('Ошибка', 'Не удалось воспроизвести голосовое сообщение', 'error');
+                        audio.addEventListener('error', function(e) {
+                            console.error('Audio error:', e, audio.error);
+                            showNotification('Ошибка', 'Не удалось загрузить аудио', 'error');
                             stopPlayback();
                         });
                     }
-                    
+            
                     await audio.play();
                     isPlaying = true;
-                    playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-                    playBtn.classList.add('playing');
-                    durationEl.classList.add('playing');
-                    
-                    // Запускаем анимацию волн
-                    waveBars.forEach(bar => bar.classList.add('animated'));
-                    
+                    // ... остальной код
+            
                 } catch (error) {
                     console.error('Ошибка воспроизведения:', error);
-                    showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
+                    showNotification('Ошибка', 'Не удалось воспроизвести', 'error');
                 }
             }
             
@@ -3918,7 +3914,42 @@
             });
         }
         
-        
+        // async function () {
+        //     if (!currentUser || !currentContact) return;
+            
+        //     const messageInput = document.getElementById('message-input');
+        //     const messageText = messageInput.value.trim();
+            
+        //     if (messageText === '') return;
+            
+        //     try {
+        //         const response = await fetch(`${API_BASE_URL}/api/send-message`, {
+        //             method: 'POST',
+        //             headers: {
+        //                 'Content-Type': 'application/json'
+        //             },
+        //             body: JSON.stringify({
+        //                 senderId: currentUser.id,
+        //                 receiverId: currentContact.id,
+        //                 messageText: messageText
+        //             })
+        //         });
+                
+        //         const data = await response.json();
+                
+        //         if (data.success) {
+        //             messageInput.value = '';
+        //             messageInput.style.height = 'auto';
+        //             await loadMessages();
+        //         } else {
+        //             showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
+        //         }
+        //     } catch (error) {
+        //         console.error('Ошибка отправки сообщения:', error);
+        //         showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
+        //     }
+        // }
+
         async function sendMessage() {
             if (isSending) {
                 console.log('Already sending, skipping...');
@@ -3966,6 +3997,7 @@
                 }, 1000);
             }
         }
+
         
         
         // ===== ФУНКЦИИ ДЛЯ ПОИСКА ПОЛЬЗОВАТЕЛЕЙ =====
@@ -4312,196 +4344,45 @@
             }
         }
         
-        // ===== НАСТРОЙКА ОБРАБОТЧИКОВ СОБЫТИЙ =====
-        // function setupEventListeners() {
-
-        //     removeEventListeners();
-        //     // Кнопка профиля
-        //     document.getElementById('profile-btn').addEventListener('click', showProfileSettings);
-        //     document.getElementById('logout-btn').addEventListener('click', logoutUser);
-            
-        //     // Кнопки профиля
-        //     document.getElementById('profile-cancel').addEventListener('click', hideProfileSettings);
-        //     document.getElementById('profile-save').addEventListener('click', saveProfileSettings);
-            
-        //     // Загрузка аватара
-        //     document.getElementById('avatar-upload').addEventListener('click', function() {
-        //         document.getElementById('avatar-file-input').click();
-        //     });
-
-        //     document.getElementById('send-btn').addEventListener('click', sendMessage);
-        //     document.getElementById('message-input').addEventListener('keypress', handleMessageInputKeypress);
-        //     document.getElementById('voice-message-btn').addEventListener('click', handleVoiceMessageClick);
-        //     document.getElementById('avatar-file-input').addEventListener('change', handleAvatarUpload);
-        //     document.getElementById('remove-avatar-btn').addEventListener('click', removeAvatar);
-            
-        //     // Отправка сообщения
-        //     document.getElementById('send-btn').addEventListener('click', sendMessage);
-        //     document.getElementById('message-input').addEventListener('keypress', function(e) {
-        //         if (e.key === 'Enter' && !e.shiftKey) {
-        //             e.preventDefault();
-        //             sendMessage();
-        //         }
-        //     });
-
-        //     document.querySelector('.collapsed-search-icon').addEventListener('click', function() {
-        //         const sidebar = document.querySelector('.contacts-sidebar');
-        //         sidebar.classList.add('mobile-expanded');
-                
-        //         // Фокусируемся на поле поиска
-        //         setTimeout(() => {
-        //             document.getElementById('contact-search').focus();
-        //         }, 300);
-        //     });
-
-        //     // Добавляем обработчики для голосовых сообщений
-        //     document.getElementById('voice-message-btn').addEventListener('click', function() {
-        //         if (this.classList.contains('recording')) {
-        //             stopVoiceRecording();
-        //         } else {
-        //             startVoiceRecording();
-        //         }
-        //     });
-            
-        //     document.getElementById('cancel-recording').addEventListener('click', cancelRecording);
-        //     document.getElementById('send-recording').addEventListener('click', sendVoiceMessage);
-
-        //       // Обработчик для мобильных устройств
-        //     const contactsSidebar = document.querySelector('.contacts-sidebar');
-        //     if (window.innerWidth <= 768) {
-        //         contactsSidebar.addEventListener('click', function(e) {
-        //             if (!this.classList.contains('mobile-expanded')) {
-        //                 this.classList.add('mobile-expanded');
-        //                 e.stopPropagation();
-        //             }
-        //         });
-                
-        //         // Закрытие по клику вне сайдбара
-        //         document.addEventListener('click', function(e) {
-        //             if (contactsSidebar.classList.contains('mobile-expanded') && 
-        //                 !contactsSidebar.contains(e.target)) {
-        //                 contactsSidebar.classList.remove('mobile-expanded');
-        //             }
-        //         });
-        //     }
-            
-        //     // Автоматическое изменение высоты текстового поля
-        //     const messageInput = document.getElementById('message-input');
-        //     messageInput.addEventListener('input', function() {
-        //         this.style.height = 'auto';
-        //         this.style.height = (this.scrollHeight) + 'px';
-        //     });
-            
-        //     // Кнопка нового чата
-        //     document.querySelector('.new-chat-btn').addEventListener('click', openSearchModal);
-            
-        //     // Кнопки звонка
-        //     document.getElementById('call-btn').addEventListener('click', startCall);
-        //     document.getElementById('end-call-btn').addEventListener('click', endCall);
-        //     document.getElementById('mute-btn').addEventListener('click', toggleMute);
-            
-        //     // Кнопки входящего звонка
-        //     document.getElementById('accept-call').addEventListener('click', acceptCall);
-        //     document.getElementById('reject-call').addEventListener('click', rejectCall);
-            
-        //     // Кнопка закрытия уведомления
-        //     document.getElementById('close-notification').addEventListener('click', hideNotification);
-            
-        //     // Кнопки формы входа/регистрации
-        //     document.getElementById('login-btn').addEventListener('click', handleLogin);
-        //     document.getElementById('register-btn').addEventListener('click', handleRegister);
-        //     document.getElementById('show-register').addEventListener('click', showRegisterForm);
-        //     document.getElementById('show-login').addEventListener('click', showLoginForm);
-            
-        //     // Поиск контактов
-        //     document.getElementById('contact-search').addEventListener('input', function(e) {
-        //         const searchTerm = e.target.value.toLowerCase();
-        //         const contactItems = document.querySelectorAll('.contact-item');
-                
-        //         contactItems.forEach(item => {
-        //             const contactName = item.querySelector('.contact-name').textContent.toLowerCase();
-        //             if (contactName.includes(searchTerm)) {
-        //                 item.style.display = 'flex';
-        //             } else {
-        //                 item.style.display = 'none';
-        //             }
-        //         });
-        //     });
-            
-        //     // Закрытие модального окна поиска
-        //     document.getElementById('close-search-modal').addEventListener('click', closeSearchModal);
-            
-        //     // Поиск пользователей при вводе
-        //     document.getElementById('user-search-input').addEventListener('input', function(e) {
-        //         const query = e.target.value.trim();
-        //         if (searchTimeout) {
-        //             clearTimeout(searchTimeout);
-        //         }
-        //         searchTimeout = setTimeout(() => {
-        //             searchUsers(query);
-        //         }, 300);
-        //     });
-            
-        //     // Закрытие модального окна по клику на overlay
-        //     document.getElementById('search-modal').addEventListener('click', function(e) {
-        //         if (e.target === this) {
-        //             closeSearchModal();
-        //         }
-        //     });
-            
-        //     document.getElementById('incoming-call-modal').addEventListener('click', function(e) {
-        //         if (e.target === this) {
-        //             rejectCall();
-        //         }
-        //     });
-            
-        //     // Закрытие по клавише Escape
-        //     document.addEventListener('keydown', function(e) {
-        //         if (e.key === 'Escape') {
-        //             if (document.getElementById('search-modal').classList.contains('active')) {
-        //                 closeSearchModal();
-        //             }
-        //             if (document.getElementById('incoming-call-modal').classList.contains('active')) {
-        //                 rejectCall();
-        //             }
-        //             if (document.getElementById('profile-overlay').classList.contains('active')) {
-        //                 hideProfileSettings();
-        //             }
-        //         }
-        //     });
-        // }
-
+        
+        // Убираем старый код и используем простые обработчики
         function setupEventListeners() {
             if (eventListenersInitialized) {
                 console.log('Event listeners already initialized');
                 return;
             }
         
-            // Очищаем все предыдущие обработчики
-            removeAllEventListeners();
-        
-            // Добавляем обработчики с использованием делегирования событий
-            setupEventDelegation();
-            
-            eventListenersInitialized = true;
-            console.log('Event listeners initialized');
-        }
-
-        function removeAllEventListeners() {
-            // Создаем новые элементы чтобы сбросить все обработчики
+            // Заменяем элементы чтобы сбросить обработчики
             replaceElementWithClone('send-btn');
             replaceElementWithClone('voice-message-btn');
             replaceElementWithClone('message-input');
+            replaceElementWithClone('cancel-recording');
+            replaceElementWithClone('send-recording');
+        
+            // Добавляем обработчики напрямую на новые элементы
+            document.getElementById('send-btn')?.addEventListener('click', sendMessage);
+            document.getElementById('voice-message-btn')?.addEventListener('click', handleVoiceMessage);
+            document.getElementById('cancel-recording')?.addEventListener('click', cancelRecording);
+            document.getElementById('send-recording')?.addEventListener('click', sendVoiceMessage);
             
-            currentListeners.clear();
+            // Обработчик клавиатуры
+            document.getElementById('message-input')?.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        
+            eventListenersInitialized = true;
+            console.log('Event listeners initialized');
         }
         
-        // Замена элемента на клон для сброса обработчиков
-        function replaceElementWithClone(elementId) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                const clone = element.cloneNode(true);
-                element.parentNode.replaceChild(clone, element);
+        function handleVoiceMessage() {
+            const btn = document.getElementById('voice-message-btn');
+            if (btn.classList.contains('recording')) {
+                stopVoiceRecording();
+            } else {
+                startVoiceRecording();
             }
         }
         
@@ -4590,5 +4471,3 @@
     </script>
 </body>
 </html>
-
-
