@@ -2505,21 +2505,19 @@
             if (isSending) return;
             isSending = true;
         
-            try {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                const audioBlob = new Blob(audioChunks, { ty
+            try {pe: 'audio/webm;codecs=opus' });
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'voice-message.webm');
                 formData.append('senderId', currentUser.id);
                 formData.append('receiverId', currentContact.id);
                 formData.append('duration', Math.floor((Date.now() - recordingStartTime) / 1000));
         
-                // Важно: сохраняем response до чтения
                 const response = await fetch(`${API_BASE_URL}/api/send-voice-message`, {
                     method: 'POST',
                     body: formData
                 });
         
-                // Читаем response только ОДИН раз
                 const responseText = await response.text();
                 let responseData;
                 
@@ -2531,27 +2529,20 @@
         
                 if (responseData.success) {
                     showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
-                    stopVoiceRecording(); // Добавляем остановку записи
-                    document.getElementById('voice-recorder').classList.remove('active');
+                    stopRecordingAndCleanup();
                     await loadMessages();
                 } else {
                     showNotification('Ошибка', responseData.error, 'error');
                 }
         
             } catch (error) {
-                console.error('Ошибка отправки:', error);
+                console.error('Ошибка отправки голосового сообщения:', error);
+                showNotification('Ошибка', 'Ошибка при отправке', 'error');
             } finally {
-                // Гарантированно останавливаем запись и очищаем
-                if (mediaRecorder && mediaRecorder.state === 'recording') {
-                    mediaRecorder.stop();
-                }
-                stopAudioVisualizer();
-                stopRecordingTimer();
-                document.getElementById('voice-recorder').classList.remove('active');
-                document.getElementById('voice-message-btn').classList.remove('recording');
-                stopRecordingAndCleanup();
-                isSending = false;
-                audioChunks = [];
+                setTimeout(() => {
+                    isSending = false;
+                    audioChunks = [];
+                }, 1000);
             }
         }
 
@@ -3915,7 +3906,7 @@
             });
         }
         
-        // async function sendMessage() {
+        // async function () {
         //     if (!currentUser || !currentContact) return;
             
         //     const messageInput = document.getElementById('message-input');
@@ -3952,20 +3943,21 @@
         // }
 
         async function sendMessage() {
-            console.log('sendMessage called', new Date().toISOString());
-            if (isSending) {
-                console.log('Blocked duplicate sendMessage');
-                return;
-            }
-            
             if (isSending) {
                 console.log('Already sending, skipping...');
                 return;
             }
             
             isSending = true;
-
+            
             try {
+                if (!currentUser || !currentContact) return;
+                
+                const messageInput = document.getElementById('message-input');
+                const messageText = messageInput.value.trim();
+                
+                if (messageText === '') return;
+                
                 const response = await fetch(`${API_BASE_URL}/api/send-message`, {
                     method: 'POST',
                     headers: {
@@ -3978,24 +3970,23 @@
                     })
                 });
                 
-                const data = await response.json();
+                const responseData = await response.json();
                 
-                if (data.success) {
+                if (responseData.success) {
                     messageInput.value = '';
                     messageInput.style.height = 'auto';
                     await loadMessages();
                 } else {
                     showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
                 }
+                
             } catch (error) {
                 console.error('Ошибка отправки сообщения:', error);
                 showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-            }
-            
             } finally {
                 setTimeout(() => {
                     isSending = false;
-                }, 1000); // Задержка перед следующей отправкой
+                }, 1000);
             }
         }
 
@@ -4468,6 +4459,7 @@
     </script>
 </body>
 </html>
+
 
 
 
