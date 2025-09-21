@@ -3690,35 +3690,19 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Исправляем URL аудиофайлов
-                    const messagesWithFixedUrls = data.messages.map(message => {
+                    // Преобразуем относительные URL в абсолютные
+                    const messagesWithAbsoluteUrls = data.messages.map(message => {
                         if (message.audio_url) {
                             let audioUrl = message.audio_url;
                             
-                            console.log('Original audio URL:', audioUrl);
-                            
-                            // Исправляем различные проблемы с URL
-                            if (audioUrl.startsWith('http://')) {
+                            // Если URL относительный (начинается с /), добавляем базовый URL
+                            if (audioUrl.startsWith('/')) {
+                                audioUrl = `${window.location.origin}${audioUrl}`;
+                            }
+                            // Убедимся, что используется HTTPS
+                            else if (audioUrl.startsWith('http://')) {
                                 audioUrl = audioUrl.replace('http://', 'https://');
                             }
-                            
-                            // Исправляем неправильно сформированные URL
-                            if (audioUrl.includes('https//')) {
-                                audioUrl = audioUrl.replace('https//', 'https://');
-                            }
-                            
-                            // Убираем дублирование домена
-                            const domain = 'fuzionprimemessenger.onrender.com';
-                            if (audioUrl.includes(domain + domain)) {
-                                audioUrl = audioUrl.replace(domain + domain, domain);
-                            }
-                            
-                            // Если URL все еще неправильный, создаем правильный
-                            if (!audioUrl.startsWith('http')) {
-                                audioUrl = `https://${domain}${audioUrl.startsWith('/') ? audioUrl : '/uploads/audio/' + audioUrl}`;
-                            }
-                            
-                            console.log('Fixed audio URL:', audioUrl);
                             
                             return {
                                 ...message,
@@ -3728,7 +3712,7 @@
                         return message;
                     });
                     
-                    renderMessages(messagesWithFixedUrls);
+                    renderMessages(messagesWithAbsoluteUrls);
                 } else {
                     renderMessages([]);
                 }
@@ -4539,6 +4523,7 @@
     </script>
 </body>
 </html>
+
 
 
 
