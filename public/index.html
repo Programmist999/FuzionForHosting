@@ -583,7 +583,7 @@
         .send-btn, .voice-message-btn {
             background: linear-gradient(90deg, #7a64ff 0%, #c850c0 100%);
             color: white;
-            border: none;
+/*             border: none; */
             border-radius: 14px;
             width: 50px;
             height: 50px;
@@ -2265,6 +2265,12 @@
         
         // WebRTC конфигурация
         // Обновите конфигурацию WebRTC
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
         const configuration = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -2510,11 +2516,6 @@
                 return;
             }
             
-            if (isSending) {
-                console.log('Already sending voice, skipping...');
-                return;
-            }
-            
             isSending = true;
         
             try {
@@ -2534,17 +2535,9 @@
                     body: formData
                 });
                 
-                const data = await response.json();
+                // Сохраняем ответ в переменную и используем только один раз
+                const responseData = await response.json();
                 
-                if (data.success) {
-                    showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
-                    await loadMessages(); // Обновляем чат
-                } else {
-                    showNotification('Ошибка', data.error || 'Не удалось отправить голосовое сообщение', 'error');
-                }
-        
-                const responseData = await response.json(); // Переименовываем переменную
-
                 if (responseData.success) {
                     showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
                     await loadMessages();
@@ -2560,7 +2553,7 @@
                     isSending = false;
                 }, 1000);
             }
-        }
+}
         
         // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
         function startRecordingTimer() {
@@ -3594,6 +3587,20 @@
             }
         }
 
+        function createTextMessageElement(message) {
+            const messageElement = document.createElement('div');
+            const isOutgoing = message.sender_id == currentUser.id;
+            
+            messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+            
+            messageElement.innerHTML = `
+                <div class="message-text">${escapeHtml(message.message_text)}</div>
+                <div class="message-time">${new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+            `;
+            
+            return messageElement;
+        }
+
         function renderMessages(messages) {
             const messagesContainer = document.getElementById('messages-container');
             
@@ -4219,17 +4226,40 @@
                 console.log('Event listeners already initialized');
                 return;
             }
-        
+            
             // Очищаем все предыдущие обработчики
             removeAllEventListeners();
-        
-            // Добавляем обработчики с использованием делегирования событий
-            setupEventDelegation();
+            
+            // Основные обработчики
+            document.getElementById('login-btn').addEventListener('click', handleLogin);
+            document.getElementById('register-btn').addEventListener('click', handleRegister);
+            document.getElementById('show-register').addEventListener('click', showRegisterForm);
+            document.getElementById('show-login').addEventListener('click', showLoginForm);
+            document.getElementById('profile-btn').addEventListener('click', showProfileSettings);
+            document.getElementById('logout-btn').addEventListener('click', logoutUser);
+            document.getElementById('profile-cancel').addEventListener('click', hideProfileSettings);
+            document.getElementById('profile-save').addEventListener('click', saveProfileSettings);
+            document.getElementById('close-notification').addEventListener('click', hideNotification);
+            document.getElementById('avatar-file-input').addEventListener('change', handleAvatarUpload);
+            document.getElementById('remove-avatar-btn').addEventListener('click', removeAvatar);
+            
+            // Обработчики звонков
+            document.getElementById('call-btn').addEventListener('click', startCall);
+            document.getElementById('mute-btn').addEventListener('click', toggleMute);
+            document.getElementById('end-call-btn').addEventListener('click', endCall);
+            document.getElementById('accept-call').addEventListener('click', acceptCall);
+            document.getElementById('reject-call').addEventListener('click', rejectCall);
+            
+            // Обработчики сообщений
+            document.getElementById('send-btn').addEventListener('click', sendMessage);
+            document.getElementById('voice-message-btn').addEventListener('click', handleVoiceMessageClick);
+            document.getElementById('message-input').addEventListener('keypress', handleMessageInputKeypress);
+            document.getElementById('cancel-recording').addEventListener('click', cancelRecording);
+            document.getElementById('send-recording').addEventListener('click', sendVoiceMessage);
             
             eventListenersInitialized = true;
             console.log('Event listeners initialized');
         }
-
         function removeAllEventListeners() {
             // Создаем новые элементы чтобы сбросить все обработчики
             replaceElementWithClone('send-btn');
@@ -4248,48 +4278,48 @@
             }
         }
         
-        // Настройка делегирования событий (самое надежное решение)
-        function setupEventDelegation() {
-            // Делегирование кликов
-            document.addEventListener('click', function(e) {
-                // Отправка сообщения
-                if (e.target.closest('#send-btn') || e.target.id === 'send-btn') {
-                    e.preventDefault();
-                    sendMessage();
-                    return;
-                }
+        // // Настройка делегирования событий (самое надежное решение)
+        // function setupEventDelegation() {
+        //     // Делегирование кликов
+        //     document.addEventListener('click', function(e) {
+        //         // Отправка сообщения
+        //         if (e.target.closest('#send-btn') || e.target.id === 'send-btn') {
+        //             e.preventDefault();
+        //             sendMessage();
+        //             return;
+        //         }
                 
-                // Голосовое сообщение
-                if (e.target.closest('#voice-message-btn') || e.target.id === 'voice-message-btn') {
-                    e.preventDefault();
-                    const btn = e.target.closest('#voice-message-btn') || e.target;
-                    handleVoiceMessage(btn);
-                    return;
-                }
+        //         // Голосовое сообщение
+        //         if (e.target.closest('#voice-message-btn') || e.target.id === 'voice-message-btn') {
+        //             e.preventDefault();
+        //             const btn = e.target.closest('#voice-message-btn') || e.target;
+        //             handleVoiceMessage(btn);
+        //             return;
+        //         }
                 
-                // Отмена записи
-                if (e.target.closest('#cancel-recording') || e.target.id === 'cancel-recording') {
-                    e.preventDefault();
-                    cancelRecording();
-                    return;
-                }
+        //         // Отмена записи
+        //         if (e.target.closest('#cancel-recording') || e.target.id === 'cancel-recording') {
+        //             e.preventDefault();
+        //             cancelRecording();
+        //             return;
+        //         }
                 
-                // Отправка записи
-                if (e.target.closest('#send-recording') || e.target.id === 'send-recording') {
-                    e.preventDefault();
-                    sendVoiceMessage();
-                    return;
-                }
-            }, true); // Используем capture phase
+        //         // Отправка записи
+        //         if (e.target.closest('#send-recording') || e.target.id === 'send-recording') {
+        //             e.preventDefault();
+        //             sendVoiceMessage();
+        //             return;
+        //         }
+        //     }, true); // Используем capture phase
         
-            // Обработка клавиатуры
-            document.addEventListener('keypress', function(e) {
-                if (e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            }, true);
-        }
+        //     // Обработка клавиатуры
+        //     document.addEventListener('keypress', function(e) {
+        //         if (e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey) {
+        //             e.preventDefault();
+        //             sendMessage();
+        //         }
+        //     }, true);
+        // }
         
         // Обработчик голосовых сообщений
         function handleVoiceMessage(button) {
@@ -4333,4 +4363,5 @@
     </script>
 </body>
 </html>
+
 
