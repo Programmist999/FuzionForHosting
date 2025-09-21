@@ -593,6 +593,7 @@
             align-items: center;
             transition: all 0.3s ease;
             flex-shrink: 0;
+            border-right: 3px;
         }
 
         .send-btn:hover {
@@ -3826,13 +3827,15 @@
                 return;
             }
             
-            if (isSending) {
-                console.log('Already sending, skipping...');
+            isSending = true;
+            const messageInput = document.getElementById('message-input');
+            const messageText = messageInput.value.trim();
+        
+            if (!messageText) {
+                isSending = false;
                 return;
             }
-            
-            isSending = true;
-
+        
             try {
                 const response = await fetch(`${API_BASE_URL}/api/send-message`, {
                     method: 'POST',
@@ -3858,8 +3861,6 @@
             } catch (error) {
                 console.error('Ошибка отправки сообщения:', error);
                 showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-            }
-            
             } finally {
                 setTimeout(() => {
                     isSending = false;
@@ -4332,3 +4333,4 @@
     </script>
 </body>
 </html>
+
