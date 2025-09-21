@@ -674,6 +674,9 @@
         .user-avatar-container {
             position: relative;
             margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         
         .call-avatar {
@@ -683,6 +686,8 @@
             object-fit: cover;
             border: 3px solid #7a64ff;
             box-shadow: 0 10px 30px rgba(122, 100, 255, 0.4);
+            position: relative; /* Добавьте это */
+            z-index: 1; /* Добавьте это */
         }
         
         .user-name {
@@ -708,6 +713,7 @@
             border-radius: 50%;
             opacity: 0;
             animation: pulse 2s infinite;
+            z-index: -1; /* Добавьте это */
         }
         
         .pulse-ring.delayed {
@@ -2501,6 +2507,16 @@
                 mediaRecorder.stop();
                 document.getElementById('voice-message-btn').classList.remove('recording');
                 document.getElementById('voice-recorder').classList.remove('active');
+                
+                // Останавливаем таймер и визуализатор
+                stopRecordingTimer();
+                stopAudioVisualizer();
+                
+                // Останавливаем поток микрофона
+                if (audioStream) {
+                    audioStream.getTracks().forEach(track => track.stop());
+                    audioStream = null;
+                }
             }
         }
         
@@ -2509,6 +2525,51 @@
             audioChunks = [];
         }
         
+//         async function sendVoiceMessage() {
+//             console.log('sendVoiceMessage called', new Date().toISOString());
+//             if (isSending) {
+//                 console.log('Blocked duplicate sendVoiceMessage');
+//                 return;
+//             }
+            
+//             isSending = true;
+        
+//             try {
+//                 // Создаем Blob из записанных данных
+//                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                
+//                 // Создаем FormData для отправки
+//                 const formData = new FormData();
+//                 formData.append('audio', audioBlob, 'voice-message.webm');
+//                 formData.append('senderId', currentUser.id);
+//                 formData.append('receiverId', currentContact.id);
+//                 formData.append('duration', Math.floor((Date.now() - recordingStartTime) / 1000));
+        
+//                 // Отправляем на сервер
+//                 const response = await fetch(`${API_BASE_URL}/api/send-voice-message`, {
+//                     method: 'POST',
+//                     body: formData
+//                 });
+                
+//                 // Сохраняем ответ в переменную и используем только один раз
+//                 const responseData = await response.json();
+                
+//                 if (responseData.success) {
+//                     showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
+//                     await loadMessages();
+//                 } else {
+//                     showNotification('Ошибка', responseData.error || 'Не удалось отправить голосовое сообщение', 'error');
+//                 }
+        
+//             } catch (error) {
+//                 console.error('Ошибка отправки голосового сообщения:', error);
+//                 showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
+//             } finally {
+//                 setTimeout(() => {
+//                     isSending = false;
+//                 }, 1000);
+//             }
+// }    
         async function sendVoiceMessage() {
             console.log('sendVoiceMessage called', new Date().toISOString());
             if (isSending) {
@@ -2519,6 +2580,9 @@
             isSending = true;
         
             try {
+                // Останавливаем запись перед отправкой
+                stopVoiceRecording();
+                
                 // Создаем Blob из записанных данных
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
                 
@@ -2535,7 +2599,6 @@
                     body: formData
                 });
                 
-                // Сохраняем ответ в переменную и используем только один раз
                 const responseData = await response.json();
                 
                 if (responseData.success) {
@@ -2549,11 +2612,15 @@
                 console.error('Ошибка отправки голосового сообщения:', error);
                 showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
             } finally {
+                // Закрываем окно записи в любом случае
+                document.getElementById('voice-recorder').classList.remove('active');
+                document.getElementById('voice-message-btn').classList.remove('recording');
+                
                 setTimeout(() => {
                     isSending = false;
                 }, 1000);
             }
-}
+        }
         
         // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
         function startRecordingTimer() {
@@ -3047,6 +3114,12 @@
         
         function endCall() {
             console.log('Ending call');
+    
+            const inputArea = document.getElementById('input-area');
+            // Показываем input-area после завершения звонка
+            if (inputArea) {
+                inputArea.style.display = 'flex';
+            }
             
             // Отправляем сообщение о завершении звонка
             if (websocket && currentCallId) {
@@ -3124,6 +3197,15 @@
         }
 
         function showCallInterface() {
+            const callContainer = document.getElementById('call-container');
+            const inputArea = document.getElementById('input-area');
+            
+            callContainer.classList.add('active');
+            // Скрываем input-area во время звонка
+            if (inputArea) {
+                inputArea.style.display = 'none';
+            }
+            
             const callContainer = document.getElementById('call-container');
             callContainer.classList.add('active');
             isCallActive = true;
@@ -3569,6 +3651,24 @@
             await loadMessages();
         }
         
+        // async function loadMessages() {
+        //     if (!currentUser || !currentContact) return;
+            
+        //     try {
+        //         const response = await fetch(`${API_BASE_URL}/api/messages/${currentUser.id}/${currentContact.id}`);
+        //         const data = await response.json();
+                
+        //         if (data.success) {
+        //             renderMessages(data.messages);
+        //         } else {
+        //             renderMessages([]);
+        //         }
+        //     } catch (error) {
+        //         console.error('Ошибка загрузки сообщений:', error);
+        //         renderMessages([]);
+        //     }
+        // }
+
         async function loadMessages() {
             if (!currentUser || !currentContact) return;
             
@@ -3577,7 +3677,32 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    renderMessages(data.messages);
+                    // Исправляем URL аудиофайлов перед отображением
+                    const messagesWithFixedUrls = data.messages.map(message => {
+                        if (message.audio_url) {
+                            let audioUrl = message.audio_url;
+                            
+                            // Исправляем различные проблемы с URL
+                            if (audioUrl.startsWith('http://')) {
+                                audioUrl = audioUrl.replace('http://', 'https://');
+                            }
+                            if (audioUrl.includes('https//')) {
+                                audioUrl = audioUrl.replace('https//', 'https://');
+                            }
+                            // Убираем дублирование домена, если есть
+                            if (audioUrl.includes('fuzionprimemessenger.onrender.comfuzionprimemessenger.onrender.com')) {
+                                audioUrl = audioUrl.replace('fuzionprimemessenger.onrender.comfuzionprimemessenger.onrender.com', 'fuzionprimemessenger.onrender.com');
+                            }
+                            
+                            return {
+                                ...message,
+                                audio_url: audioUrl
+                            };
+                        }
+                        return message;
+                    });
+                    
+                    renderMessages(messagesWithFixedUrls);
                 } else {
                     renderMessages([]);
                 }
