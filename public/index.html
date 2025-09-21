@@ -3047,6 +3047,19 @@
             }
             
             try {
+                // Находим пользователя по ID звонящего
+                const callerUser = allUsers.find(user => user.id == window.incomingCallerId);
+                if (callerUser) {
+                    currentContact = callerUser;
+                } else {
+                    // Если пользователь не найден в списке, создаем временный объект
+                    currentContact = {
+                        id: window.incomingCallerId,
+                        username: 'Собеседник',
+                        name: 'Собеседник'
+                    };
+                }
+                
                 // Получаем медиапоток
                 audioStream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
@@ -3677,22 +3690,35 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Исправляем URL аудиофайлов перед отображением
+                    // Исправляем URL аудиофайлов
                     const messagesWithFixedUrls = data.messages.map(message => {
                         if (message.audio_url) {
                             let audioUrl = message.audio_url;
+                            
+                            console.log('Original audio URL:', audioUrl);
                             
                             // Исправляем различные проблемы с URL
                             if (audioUrl.startsWith('http://')) {
                                 audioUrl = audioUrl.replace('http://', 'https://');
                             }
+                            
+                            // Исправляем неправильно сформированные URL
                             if (audioUrl.includes('https//')) {
                                 audioUrl = audioUrl.replace('https//', 'https://');
                             }
-                            // Убираем дублирование домена, если есть
-                            if (audioUrl.includes('fuzionprimemessenger.onrender.comfuzionprimemessenger.onrender.com')) {
-                                audioUrl = audioUrl.replace('fuzionprimemessenger.onrender.comfuzionprimemessenger.onrender.com', 'fuzionprimemessenger.onrender.com');
+                            
+                            // Убираем дублирование домена
+                            const domain = 'fuzionprimemessenger.onrender.com';
+                            if (audioUrl.includes(domain + domain)) {
+                                audioUrl = audioUrl.replace(domain + domain, domain);
                             }
+                            
+                            // Если URL все еще неправильный, создаем правильный
+                            if (!audioUrl.startsWith('http')) {
+                                audioUrl = `https://${domain}${audioUrl.startsWith('/') ? audioUrl : '/uploads/audio/' + audioUrl}`;
+                            }
+                            
+                            console.log('Fixed audio URL:', audioUrl);
                             
                             return {
                                 ...message,
@@ -4346,6 +4372,16 @@
             }
         }
 
+        function clearSearchResults() {
+            const resultsContainer = document.getElementById('search-results');
+            resultsContainer.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <p>Введите имя пользователя для поиска</p>
+                </div>
+            `;
+        }
+
         function setupEventListeners() {
             if (eventListenersInitialized) {
                 console.log('Event listeners already initialized');
@@ -4356,6 +4392,8 @@
             removeAllEventListeners();
             
             // Основные обработчики
+            document.getElementById('close-search-modal').addEventListener('click', closeSearchModal);
+            document.querySelector('.new-chat-btn').addEventListener('click', openSearchModal);
             document.getElementById('login-btn').addEventListener('click', handleLogin);
             document.getElementById('register-btn').addEventListener('click', handleRegister);
             document.getElementById('show-register').addEventListener('click', showRegisterForm);
@@ -4381,6 +4419,19 @@
             document.getElementById('message-input').addEventListener('keypress', handleMessageInputKeypress);
             document.getElementById('cancel-recording').addEventListener('click', cancelRecording);
             document.getElementById('send-recording').addEventListener('click', sendVoiceMessage);
+
+            document.getElementById('user-search-input').addEventListener('input', function(e) {
+                const query = e.target.value.trim();
+                clearTimeout(searchTimeout);
+                
+                if (query.length >= 2) {
+                    searchTimeout = setTimeout(() => {
+                        searchUsers(query);
+                    }, 300);
+                } else if (query.length === 0) {
+                    clearSearchResults();
+                }
+            });
             
             eventListenersInitialized = true;
             console.log('Event listeners initialized');
@@ -4488,6 +4539,7 @@
     </script>
 </body>
 </html>
+
 
 
 
