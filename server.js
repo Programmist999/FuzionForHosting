@@ -96,6 +96,13 @@ const upload = multer({
     }
 });
 
+app.use('/uploads/audio', express.static(path.join(__dirname, 'uploads', 'audio'), {
+    setHeaders: (res, path) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+}));
+
 function handleWebSocketMessage(userId, data) {
     console.log('Received message:', data.type, 'from:', userId);
     
@@ -761,6 +768,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
