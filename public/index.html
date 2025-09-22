@@ -3975,135 +3975,150 @@
             }
         }
 
-        // function setupVoiceMessagePlayback(element, message) {
-        //     const container = element.querySelector('.voice-message-container');
-        //     const playBtn = element.querySelector('.voice-play-btn');
-        //     const durationEl = element.querySelector('.voice-duration');
-        //     const progressBar = element.querySelector('.voice-progress');
-        //     const waveBars = element.querySelectorAll('.wave-bar');
+//         function setupVoiceMessagePlayback(element, message) {
+//             const container = element.querySelector('.voice-message-container');
+//             const playBtn = element.querySelector('.voice-play-btn');
+//             const durationEl = element.querySelector('.voice-duration');
+//             const progressBar = element.querySelector('.voice-progress');
+//             const waveBars = element.querySelectorAll('.wave-bar');
             
-        //     let audio = null;
-        //     let isPlaying = false;
+//             let audio = null;
+//             let isPlaying = false;
             
-        //     container.addEventListener('click', async function(e) {
-        //         if (e.target.closest('.voice-play-btn')) {
-        //             e.stopPropagation();
+//             container.addEventListener('click', async function(e) {
+//                 if (e.target.closest('.voice-play-btn')) {
+//                     e.stopPropagation();
                     
-        //             if (isPlaying) {
-        //                 stopPlayback();
-        //             } else {
-        //                 await startPlayback();
-        //             }
-        //         }
-        //     });
+//                     if (isPlaying) {
+//                         stopPlayback();
+//                     } else {
+//                         await startPlayback();
+//                     }
+//                 }
+//             });
             
-        //     async function startPlayback() {
-        //         try {
-        //             stopAllVoiceMessages();
-        //             if (!audio) {
-        //                 audio = new Audio(message.audio_url);
-        //                 currentPlayingAudio = audio;
-        //                 currentPlayingElement = element;
+//             async function startPlayback() {
+//                 try {
+//                     stopAllVoiceMessages();
+//                     if (!audio) {
+//                         // Проверяем доступность аудиофайла перед созданием
+//                         console.log('Попытка воспроизведения:', message.audio_url);
                         
-        //                 audio.addEventListener('timeupdate', function() {
-        //                     // ДОБАВЬТЕ ПРОВЕРКУ НА NULL
-        //                     if (!audio) return;
-        //                     const progress = (audio.currentTime / audio.duration) * 100;
-        //                     if (progressBar) {
-        //                         progressBar.style.width = progress + '%';
-        //                     }
+//                         // Проверка доступности файла
+//                         try {
+//                             const testResponse = await fetch(message.audio_url, { method: 'HEAD' });
+//                             if (!testResponse.ok) {
+//                                 throw new Error('Аудиофайл недоступен');
+//                             }
+//                             console.log('Аудиофайл доступен');
+//                         } catch (error) {
+//                             console.error('Аудиофайл недоступен:', error);
+//                             showNotification('Ошибка', 'Аудиофайл не найден', 'error');
+//                             return;
+//                         }
+                        
+//                         audio = new Audio(message.audio_url);
+//                         currentPlayingAudio = audio;
+//                         currentPlayingElement = element;
+                        
+//                         audio.addEventListener('timeupdate', function() {
+//                             if (!audio || !progressBar) return;
+//                             const progress = (audio.currentTime / audio.duration) * 100;
+//                             progressBar.style.width = progress + '%';
                             
-        //                     // Анимируем волны в соответствии с воспроизведением
-        //                     animateWaveform(audio.currentTime, audio.duration);
-        //                 });
+//                             animateWaveform(audio.currentTime, audio.duration);
+//                         });
                         
-        //                 audio.addEventListener('ended', function() {
-        //                     stopPlayback();
-        //                     resetPlayback();
-        //                 });
+//                         audio.addEventListener('ended', function() {
+//                             stopPlayback();
+//                             resetPlayback();
+//                         });
                         
-        //                 audio.addEventListener('error', function() {
-        //                     showNotification('Ошибка', 'Не удалось воспроизвести голосовое сообщение', 'error');
-        //                     stopPlayback();
-        //                 });
-        //             }
+//                         audio.addEventListener('error', function(e) {
+//                             console.error('Ошибка аудио:', e);
+//                             showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
+//                             stopPlayback();
+//                         });
+                        
+//                         audio.addEventListener('canplaythrough', function() {
+//                             console.log('Аудио готово к воспроизведению');
+//                         });
+                        
+//                         audio.addEventListener('stalled', function() {
+//                             console.log('Воспроизведение остановилось');
+//                             showNotification('Ошибка', 'Проблема с воспроизведением', 'error');
+//                             stopPlayback();
+//                         });
+//                     }
                     
-        //             await audio.play();
-        //             isPlaying = true;
-        //             if (playBtn) {
-        //                 playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-        //                 playBtn.classList.add('playing');
-        //             }
-        //             if (durationEl) {
-        //                 durationEl.classList.add('playing');
-        //             }
+//                     await audio.play();
+//                     isPlaying = true;
+//                     if (playBtn) {
+//                         playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+//                         playBtn.classList.add('playing');
+//                     }
+//                     if (durationEl) {
+//                         durationEl.classList.add('playing');
+//                     }
                     
-        //             // Запускаем анимацию волн
-        //             if (waveBars) {
-        //                 waveBars.forEach(bar => bar.classList.add('animated'));
-        //             }
+//                     if (waveBars) {
+//                         waveBars.forEach(bar => bar.classList.add('animated'));
+//                     }
                     
-        //         } catch (error) {
-        //             console.error('Ошибка воспроизведения:', error);
-        //             showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
-        //         }
-        //     }
+//                 } catch (error) {
+//                     console.error('Ошибка воспроизведения:', error);
+//                     showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
+//                 }
+// }
             
-        //     function stopPlayback() {
-        //         if (audio) {
-        //             audio.pause();
-        //         }
-        //         isPlaying = false;
-        //         if (playBtn) {
-        //             playBtn.innerHTML = '<i class="fas fa-play"></i>';
-        //             playBtn.classList.remove('playing');
-        //         }
-        //         if (durationEl) {
-        //             durationEl.classList.remove('playing');
-        //         }
+//             function stopPlayback() {
+//                 if (audio) {
+//                     audio.pause();
+//                 }
+//                 isPlaying = false;
+//                 if (playBtn) {
+//                     playBtn.innerHTML = '<i class="fas fa-play"></i>';
+//                     playBtn.classList.remove('playing');
+//                 }
+//                 if (durationEl) {
+//                     durationEl.classList.remove('playing');
+//                 }
                 
-        //         // Останавливаем анимацию волн
-        //         if (waveBars) {
-        //             waveBars.forEach(bar => bar.classList.remove('animated'));
-        //         }
-        //     }
+//                 // Останавливаем анимацию волн
+//                 if (waveBars) {
+//                     waveBars.forEach(bar => bar.classList.remove('animated'));
+//                 }
+//             }
             
-        //     function resetPlayback() {
-        //         if (progressBar) {
-        //             progressBar.style.width = '0%';
-        //         }
-        //         if (waveBars) {
-        //             waveBars.forEach(bar => {
-        //                 bar.style.transform = 'scaleY(1)';
-        //                 bar.style.opacity = '0.7';
-        //             });
-        //         }
-        //     }
+//             function resetPlayback() {
+//                 if (progressBar) {
+//                     progressBar.style.width = '0%';
+//                 }
+//             }
             
-        //     function animateWaveform(currentTime, duration) {
-        //         const progress = currentTime / duration;
-        //         const activeBars = Math.floor(progress * waveBars.length);
+//             function animateWaveform(currentTime, duration) {
+//                 const progress = currentTime / duration;
+//                 const activeBars = Math.floor(progress * waveBars.length);
                 
-        //         if (waveBars) {
-        //             waveBars.forEach((bar, index) => {
-        //                 if (index <= activeBars) {
-        //                     bar.classList.add('active');
-        //                 } else {
-        //                     bar.classList.remove('active');
-        //                 }
-        //             });
-        //         }
-        //     }
-
+//                 if (waveBars) {
+//                     waveBars.forEach((bar, index) => {
+//                         if (index <= activeBars) {
+//                             bar.classList.add('active');
+//                         } else {
+//                             bar.classList.remove('active');
+//                         }
+//                     });
+//                 }
+//             }
             
-        //     // Очистка при удалении элемента
-        //     element.addEventListener('DOMNodeRemoved', function() {
-        //         if (audio) {
-        //             audio.pause();
-        //             audio = null;
-        //         }
-        //     });
-        // }
+//             // Очистка при удалении элемента
+//             element.addEventListener('DOMNodeRemoved', function() {
+//                 if (audio) {
+//                     audio.pause();
+//                     audio = null;
+//                 }
+//             });
+//         }
 
         function setupVoiceMessagePlayback(element, message) {
             const container = element.querySelector('.voice-message-container');
@@ -4131,21 +4146,7 @@
                 try {
                     stopAllVoiceMessages();
                     if (!audio) {
-                        // Проверяем доступность аудиофайла перед созданием
                         console.log('Попытка воспроизведения:', message.audio_url);
-                        
-                        // Проверка доступности файла
-                        try {
-                            const testResponse = await fetch(message.audio_url, { method: 'HEAD' });
-                            if (!testResponse.ok) {
-                                throw new Error('Аудиофайл недоступен');
-                            }
-                            console.log('Аудиофайл доступен');
-                        } catch (error) {
-                            console.error('Аудиофайл недоступен:', error);
-                            showNotification('Ошибка', 'Аудиофайл не найден', 'error');
-                            return;
-                        }
                         
                         audio = new Audio(message.audio_url);
                         currentPlayingAudio = audio;
@@ -4169,16 +4170,6 @@
                             showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
                             stopPlayback();
                         });
-                        
-                        audio.addEventListener('canplaythrough', function() {
-                            console.log('Аудио готово к воспроизведению');
-                        });
-                        
-                        audio.addEventListener('stalled', function() {
-                            console.log('Воспроизведение остановилось');
-                            showNotification('Ошибка', 'Проблема с воспроизведением', 'error');
-                            stopPlayback();
-                        });
                     }
                     
                     await audio.play();
@@ -4199,7 +4190,7 @@
                     console.error('Ошибка воспроизведения:', error);
                     showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
                 }
-}
+            }
             
             function stopPlayback() {
                 if (audio) {
@@ -4214,7 +4205,6 @@
                     durationEl.classList.remove('playing');
                 }
                 
-                // Останавливаем анимацию волн
                 if (waveBars) {
                     waveBars.forEach(bar => bar.classList.remove('animated'));
                 }
@@ -4241,13 +4231,22 @@
                 }
             }
             
-            // Очистка при удалении элемента
-            element.addEventListener('DOMNodeRemoved', function() {
-                if (audio) {
-                    audio.pause();
-                    audio = null;
-                }
+            // ЗАМЕНА: Используем MutationObserver вместо DOMNodeRemoved
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.removedNodes && Array.from(mutation.removedNodes).includes(element)) {
+                        if (audio) {
+                            audio.pause();
+                            audio = null;
+                        }
+                        observer.disconnect();
+                    }
+                });
             });
+        
+            if (element.parentNode) {
+                observer.observe(element.parentNode, { childList: true });
+            }
         }
 
         async function sendMessage() {
@@ -4811,6 +4810,7 @@
     </script>
 </body>
 </html>
+
 
 
 
