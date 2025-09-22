@@ -583,7 +583,7 @@
         .send-btn, .voice-message-btn {
             background: linear-gradient(90deg, #7a64ff 0%, #c850c0 100%);
             color: white;
-/*             border: none; */
+            border: none; 
             border-radius: 14px;
             width: 50px;
             height: 50px;
@@ -596,12 +596,12 @@
             border-right: 3px;
         }
 
-        .send-btn:hover {
+        .send-btn, .voice-message-btn:hover {
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 8px 25px rgba(122, 100, 255, 0.4);
         }
 
-        .send-btn:active {
+        .send-btn, .voice-message-btn:active {
             transform: translateY(-1px) scale(0.98);
         }
 
@@ -614,11 +614,11 @@
             }
         }
 
-        .send-btn:not(:disabled) {
+        .send-btn, .voice-message-btn:not(:disabled) {
             animation: sendButtonFloat 3s ease-in-out infinite;
         }
 
-        .send-btn:disabled {
+        .send-btn, .voice-message-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             animation: none;
@@ -677,6 +677,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            width: 140px; /* Фиксированная ширина */
+            height: 140px; /* Фиксированная высота */
         }
         
         .call-avatar {
@@ -686,8 +688,26 @@
             object-fit: cover;
             border: 3px solid #7a64ff;
             box-shadow: 0 10px 30px rgba(122, 100, 255, 0.4);
-            position: relative; /* Добавьте это */
-            z-index: 1; /* Добавьте это */
+            position: relative;
+            z-index: 2; /* Аватар выше колец */
+        }
+        
+        .pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 160px; /* Немного больше аватара */
+            height: 160px;
+            border: 2px solid #7a64ff;
+            border-radius: 50%;
+            opacity: 0;
+            animation: pulse 2s infinite;
+            z-index: 1; /* Кольца под аватаром */
+        }
+        
+        .pulse-ring.delayed {
+            animation-delay: 1s;
         }
         
         .user-name {
@@ -700,24 +720,6 @@
         .user-status {
             color: #a594fe;
             font-size: 16px;
-        }
-        
-        .pulse-ring {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 180px;
-            height: 180px;
-            border: 2px solid #7a64ff;
-            border-radius: 50%;
-            opacity: 0;
-            animation: pulse 2s infinite;
-            z-index: -1; /* Добавьте это */
-        }
-        
-        .pulse-ring.delayed {
-            animation-delay: 1s;
         }
         
         .volume-indicator {
@@ -1326,21 +1328,37 @@
         .voice-message-container {
             display: flex;
             align-items: center;
-            padding: 12px 18px;
-            border-radius: 20px;
-            background: rgba(38, 41, 85, 0.4);
+            padding: 12px 16px;
+            border-radius: 18px;
+            background: rgba(38, 41, 85, 0.6);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(101, 78, 163, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             cursor: pointer;
             transition: all 0.3s ease;
-            min-width: 200px;
-            max-width: 300px;
+            min-width: 120px;
+            max-width: 250px;
+            position: relative;
+            overflow: hidden;
         }
-
+        
         .voice-message-container:hover {
-            background: rgba(38, 41, 85, 0.6);
+            background: rgba(38, 41, 85, 0.8);
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(122, 100, 255, 0.2);
+        }
+        
+        /* Для исходящих сообщений - более светлый фон */
+        .message-outgoing .voice-message-container {
+            background: linear-gradient(135deg, 
+                rgba(122, 100, 255, 0.15) 0%, 
+                rgba(200, 80, 192, 0.15) 100%);
+            border: 1px solid rgba(122, 100, 255, 0.2);
+        }
+        
+        .message-outgoing .voice-message-container:hover {
+            background: linear-gradient(135deg, 
+                rgba(122, 100, 255, 0.25) 0%, 
+                rgba(200, 80, 192, 0.25) 100%);
         }
 
         .voice-waveform {
@@ -1353,37 +1371,43 @@
         }
         
         .wave-bar {
-            width: 3px;
-            background: rgba(122, 100, 255, 0.6);
-            border-radius: 1.5px;
+            width: 2px;
+            background: rgba(122, 100, 255, 0.4);
+            border-radius: 1px;
             transition: all 0.3s ease;
+            min-height: 3px;
         }
         
         .wave-bar.active {
             background: linear-gradient(180deg, #7a64ff 0%, #c850c0 100%);
         }
-
+        
+        .wave-bar.animated {
+            animation: wave 1.2s ease-in-out infinite;
+        }
+        
         .voice-duration {
             font-size: 12px;
             color: #a594fe;
             font-weight: 600;
-            min-width: 40px;
+            min-width: 30px;
             text-align: right;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         }
         
         .voice-duration.playing {
-            color: #ff3366;
+            color: #7a64ff;
         }
         
         /* Прогресс-бар */
-        .voice-progress {
+        voice-progress {
             position: absolute;
-            bottom: -2px;
+            bottom: 0;
             left: 0;
             height: 2px;
             background: linear-gradient(90deg, #7a64ff 0%, #c850c0 100%);
-            border-radius: 0 0 20px 20px;
             transition: width 0.1s linear;
+            border-radius: 0 0 18px 18px;
         }
         
         /* Для исходящих сообщений */
@@ -1400,49 +1424,31 @@
         
         /* Кнопка воспроизведения */
         .voice-play-btn {
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #7a64ff 0%, #c850c0 100%);
-            border: none;
+            background: rgba(122, 100, 255, 0.2);
+            border: 1px solid rgba(122, 100, 255, 0.3);
             display: flex;
             align-items: center;
             justify-content: center;
             margin-right: 12px;
-            color: white;
+            color: #7a64ff;
             cursor: pointer;
             transition: all 0.3s ease;
             flex-shrink: 0;
         }
         
         .voice-play-btn:hover {
+            background: rgba(122, 100, 255, 0.3);
             transform: scale(1.1);
-            box-shadow: 0 0 15px rgba(122, 100, 255, 0.4);
+            box-shadow: 0 0 10px rgba(122, 100, 255, 0.3);
         }
         
         .voice-play-btn.playing {
-            background: linear-gradient(135deg, #ff3366 0%, #ff7733 100%);
-        }
-
-/*         .voice-message-btn {
-            background: rgba(101, 78, 163, 0.2);
-            border: 1px solid rgba(101, 78, 163, 0.4);
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            color: #a594fe;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: all 0.3s ease;
-            flex-shrink: 0;
-        } */
-        
-        .voice-message-btn:hover {
-            background: rgba(101, 78, 163, 0.4);
-            transform: translateY(-2px);
-            color: #7a64ff;
+            background: linear-gradient(135deg, #7a64ff 0%, #c850c0 100%);
+            color: white;
+            border: none;
         }
         
         .voice-message-btn.recording {
@@ -1755,14 +1761,14 @@
 
         @keyframes pulse {
             0% {
-                transform: scale(0.9);
+                transform: translate(-50%, -50%) scale(0.8);
                 opacity: 0.8;
             }
             50% {
                 opacity: 0.4;
             }
             100% {
-                transform: scale(1.1);
+                transform: translate(-50%, -50%) scale(1.2);
                 opacity: 0;
             }
         }
@@ -1778,8 +1784,33 @@
             }
         }
         
-        .wave-bar.animated {
-            animation: wave 1.2s ease-in-out infinite;
+        /* Адаптация для мобильных */
+        @media (max-width: 768px) {
+            .voice-message-container {
+                max-width: 200px;
+                padding: 10px 14px;
+            }
+            
+            .voice-play-btn {
+                width: 28px;
+                height: 28px;
+                margin-right: 10px;
+            }
+            
+            .voice-waveform {
+                height: 25px;
+                margin: 0 10px;
+                gap: 1px;
+            }
+            
+            .wave-bar {
+                width: 1.5px;
+            }
+            
+            .voice-duration {
+                font-size: 11px;
+                min-width: 25px;
+            }
         }
         
         /* Адаптация для мобильных */
@@ -3695,7 +3726,7 @@
             document.getElementById('welcome-message').style.display = 'none';
             await loadMessages();
         }
-        
+
         // async function loadMessages() {
         //     if (!currentUser || !currentContact) return;
             
@@ -3704,7 +3735,29 @@
         //         const data = await response.json();
                 
         //         if (data.success) {
-        //             renderMessages(data.messages);
+        //             // Преобразуем относительные URL в абсолютные
+        //             const messagesWithAbsoluteUrls = data.messages.map(message => {
+        //                 if (message.audio_url) {
+        //                     let audioUrl = message.audio_url;
+                            
+        //                     // Если URL относительный (начинается с /), добавляем базовый URL
+        //                     if (audioUrl.startsWith('/')) {
+        //                         audioUrl = `${window.location.origin}${audioUrl}`;
+        //                     }
+        //                     // Убедимся, что используется HTTPS
+        //                     else if (audioUrl.startsWith('http://')) {
+        //                         audioUrl = audioUrl.replace('http://', 'https://');
+        //                     }
+                            
+        //                     return {
+        //                         ...message,
+        //                         audio_url: audioUrl
+        //                     };
+        //                 }
+        //                 return message;
+        //             });
+                    
+        //             renderMessages(messagesWithAbsoluteUrls);
         //         } else {
         //             renderMessages([]);
         //         }
@@ -3721,20 +3774,44 @@
                 const response = await fetch(`${API_BASE_URL}/api/messages/${currentUser.id}/${currentContact.id}`);
                 const data = await response.json();
                 
+                console.log('Получены сообщения:', data.messages);
+                
                 if (data.success) {
-                    // Преобразуем относительные URL в абсолютные
-                    const messagesWithAbsoluteUrls = data.messages.map(message => {
+                    // Исправляем URL аудиофайлов
+                    const messagesWithFixedUrls = data.messages.map(message => {
                         if (message.audio_url) {
+                            console.log('Исходный audio_url:', message.audio_url);
+                            
                             let audioUrl = message.audio_url;
                             
-                            // Если URL относительный (начинается с /), добавляем базовый URL
-                            if (audioUrl.startsWith('/')) {
-                                audioUrl = `${window.location.origin}${audioUrl}`;
-                            }
-                            // Убедимся, что используется HTTPS
-                            else if (audioUrl.startsWith('http://')) {
+                            // Исправляем различные проблемы с URL
+                            if (audioUrl.startsWith('http://')) {
                                 audioUrl = audioUrl.replace('http://', 'https://');
                             }
+                            
+                            // Исправляем неправильно сформированные URL
+                            if (audioUrl.includes('https//')) {
+                                audioUrl = audioUrl.replace('https//', 'https://');
+                            }
+                            
+                            // Убираем дублирование домена
+                            const domain = 'fuzionprimemessenger.onrender.com';
+                            if (audioUrl.includes(domain + domain)) {
+                                audioUrl = audioUrl.replace(domain + domain, domain);
+                            }
+                            
+                            // Если URL все еще неправильный, создаем правильный
+                            if (!audioUrl.startsWith('https://')) {
+                                // Проверяем, является ли URL относительным
+                                if (audioUrl.startsWith('/')) {
+                                    audioUrl = `https://${domain}${audioUrl}`;
+                                } else {
+                                    // Если это просто имя файла, добавляем полный путь
+                                    audioUrl = `https://${domain}/uploads/audio/${audioUrl}`;
+                                }
+                            }
+                            
+                            console.log('Исправленный audio_url:', audioUrl);
                             
                             return {
                                 ...message,
@@ -3744,7 +3821,7 @@
                         return message;
                     });
                     
-                    renderMessages(messagesWithAbsoluteUrls);
+                    renderMessages(messagesWithFixedUrls);
                 } else {
                     renderMessages([]);
                 }
@@ -3770,6 +3847,13 @@
 
         function renderMessages(messages) {
             const messagesContainer = document.getElementById('messages-container');
+
+            console.log('Рендерим сообщения:', messages);
+            messages.forEach((msg, index) => {
+                if (msg.audio_url) {
+                    console.log(`Сообщение ${index}:`, msg.audio_url);
+                }
+            });
     
             // Останавливаем воспроизведение перед обновлением сообщений
             stopAllVoiceMessages();
@@ -3843,17 +3927,18 @@
             waveform.innerHTML = '';
             
             const barCount = 25;
-            const duration = message.duration || 10;
+            const baseHeight = 8; // Базовая высота полосок
             
             for (let i = 0; i < barCount; i++) {
                 const bar = document.createElement('div');
                 bar.className = 'wave-bar';
                 
-                // Создаем красивый waveform паттерн
-                const height = Math.sin(i / 2.5) * 12 + 15;
+                // Создаем случайную высоту для более естественного вида
+                const randomVariation = Math.random() * 12;
+                const height = baseHeight + randomVariation;
                 bar.style.height = height + 'px';
                 
-                // Добавляем задержку для анимации
+                // Добавляем небольшую задержку для анимации
                 bar.style.animationDelay = `${i * 0.05}s`;
                 
                 waveform.appendChild(bar);
@@ -3921,8 +4006,12 @@
         //                 currentPlayingElement = element;
                         
         //                 audio.addEventListener('timeupdate', function() {
+        //                     // ДОБАВЬТЕ ПРОВЕРКУ НА NULL
+        //                     if (!audio) return;
         //                     const progress = (audio.currentTime / audio.duration) * 100;
-        //                     progressBar.style.width = progress + '%';
+        //                     if (progressBar) {
+        //                         progressBar.style.width = progress + '%';
+        //                     }
                             
         //                     // Анимируем волны в соответствии с воспроизведением
         //                     animateWaveform(audio.currentTime, audio.duration);
@@ -3941,54 +4030,71 @@
                     
         //             await audio.play();
         //             isPlaying = true;
-        //             playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-        //             playBtn.classList.add('playing');
-        //             durationEl.classList.add('playing');
+        //             if (playBtn) {
+        //                 playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+        //                 playBtn.classList.add('playing');
+        //             }
+        //             if (durationEl) {
+        //                 durationEl.classList.add('playing');
+        //             }
                     
         //             // Запускаем анимацию волн
-        //             waveBars.forEach(bar => bar.classList.add('animated'));
+        //             if (waveBars) {
+        //                 waveBars.forEach(bar => bar.classList.add('animated'));
+        //             }
                     
         //         } catch (error) {
         //             console.error('Ошибка воспроизведения:', error);
         //             showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
         //         }
         //     }
-
-        
             
         //     function stopPlayback() {
         //         if (audio) {
         //             audio.pause();
         //         }
         //         isPlaying = false;
-        //         playBtn.innerHTML = '<i class="fas fa-play"></i>';
-        //         playBtn.classList.remove('playing');
-        //         durationEl.classList.remove('playing');
+        //         if (playBtn) {
+        //             playBtn.innerHTML = '<i class="fas fa-play"></i>';
+        //             playBtn.classList.remove('playing');
+        //         }
+        //         if (durationEl) {
+        //             durationEl.classList.remove('playing');
+        //         }
                 
         //         // Останавливаем анимацию волн
-        //         waveBars.forEach(bar => bar.classList.remove('animated'));
+        //         if (waveBars) {
+        //             waveBars.forEach(bar => bar.classList.remove('animated'));
+        //         }
         //     }
             
         //     function resetPlayback() {
-        //         progressBar.style.width = '0%';
-        //         waveBars.forEach(bar => {
-        //             bar.style.transform = 'scaleY(1)';
-        //             bar.style.opacity = '0.7';
-        //         });
+        //         if (progressBar) {
+        //             progressBar.style.width = '0%';
+        //         }
+        //         if (waveBars) {
+        //             waveBars.forEach(bar => {
+        //                 bar.style.transform = 'scaleY(1)';
+        //                 bar.style.opacity = '0.7';
+        //             });
+        //         }
         //     }
             
         //     function animateWaveform(currentTime, duration) {
         //         const progress = currentTime / duration;
         //         const activeBars = Math.floor(progress * waveBars.length);
                 
-        //         waveBars.forEach((bar, index) => {
-        //             if (index <= activeBars) {
-        //                 bar.classList.add('active');
-        //             } else {
-        //                 bar.classList.remove('active');
-        //             }
-        //         });
+        //         if (waveBars) {
+        //             waveBars.forEach((bar, index) => {
+        //                 if (index <= activeBars) {
+        //                     bar.classList.add('active');
+        //                 } else {
+        //                     bar.classList.remove('active');
+        //                 }
+        //             });
+        //         }
         //     }
+
             
         //     // Очистка при удалении элемента
         //     element.addEventListener('DOMNodeRemoved', function() {
@@ -4025,19 +4131,31 @@
                 try {
                     stopAllVoiceMessages();
                     if (!audio) {
+                        // Проверяем доступность аудиофайла перед созданием
+                        console.log('Попытка воспроизведения:', message.audio_url);
+                        
+                        // Проверка доступности файла
+                        try {
+                            const testResponse = await fetch(message.audio_url, { method: 'HEAD' });
+                            if (!testResponse.ok) {
+                                throw new Error('Аудиофайл недоступен');
+                            }
+                            console.log('Аудиофайл доступен');
+                        } catch (error) {
+                            console.error('Аудиофайл недоступен:', error);
+                            showNotification('Ошибка', 'Аудиофайл не найден', 'error');
+                            return;
+                        }
+                        
                         audio = new Audio(message.audio_url);
                         currentPlayingAudio = audio;
                         currentPlayingElement = element;
                         
                         audio.addEventListener('timeupdate', function() {
-                            // ДОБАВЬТЕ ПРОВЕРКУ НА NULL
-                            if (!audio) return;
+                            if (!audio || !progressBar) return;
                             const progress = (audio.currentTime / audio.duration) * 100;
-                            if (progressBar) {
-                                progressBar.style.width = progress + '%';
-                            }
+                            progressBar.style.width = progress + '%';
                             
-                            // Анимируем волны в соответствии с воспроизведением
                             animateWaveform(audio.currentTime, audio.duration);
                         });
                         
@@ -4046,8 +4164,19 @@
                             resetPlayback();
                         });
                         
-                        audio.addEventListener('error', function() {
-                            showNotification('Ошибка', 'Не удалось воспроизвести голосовое сообщение', 'error');
+                        audio.addEventListener('error', function(e) {
+                            console.error('Ошибка аудио:', e);
+                            showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
+                            stopPlayback();
+                        });
+                        
+                        audio.addEventListener('canplaythrough', function() {
+                            console.log('Аудио готово к воспроизведению');
+                        });
+                        
+                        audio.addEventListener('stalled', function() {
+                            console.log('Воспроизведение остановилось');
+                            showNotification('Ошибка', 'Проблема с воспроизведением', 'error');
                             stopPlayback();
                         });
                     }
@@ -4062,7 +4191,6 @@
                         durationEl.classList.add('playing');
                     }
                     
-                    // Запускаем анимацию волн
                     if (waveBars) {
                         waveBars.forEach(bar => bar.classList.add('animated'));
                     }
@@ -4071,7 +4199,7 @@
                     console.error('Ошибка воспроизведения:', error);
                     showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
                 }
-            }
+}
             
             function stopPlayback() {
                 if (audio) {
@@ -4095,12 +4223,6 @@
             function resetPlayback() {
                 if (progressBar) {
                     progressBar.style.width = '0%';
-                }
-                if (waveBars) {
-                    waveBars.forEach(bar => {
-                        bar.style.transform = 'scaleY(1)';
-                        bar.style.opacity = '0.7';
-                    });
                 }
             }
             
@@ -4689,6 +4811,7 @@
     </script>
 </body>
 </html>
+
 
 
 
