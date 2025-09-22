@@ -4941,6 +4941,55 @@
             }
         }
         
+        // async function sendFile() {
+        //     if (!selectedFile || !currentContact) {
+        //         showNotification('Ошибка', 'Файл не выбран или чат не выбран', 'error');
+        //         return;
+        //     }
+            
+        //     try {
+        //         const formData = new FormData();
+        //         formData.append('file', selectedFile);
+        //         formData.append('senderId', currentUser.id);
+        //         formData.append('receiverId', currentContact.id);
+        //         formData.append('fileName', selectedFile.name);
+                
+        //         showNotification('Информация', 'Файл отправляется...', 'info');
+                
+        //         const response = await fetch(`${API_BASE_URL}/api/send-file`, {
+        //             method: 'POST',
+        //             body: formData
+        //         });
+                
+        //         // Проверяем статус ответа
+        //         if (!response.ok) {
+        //             throw new Error(`HTTP error! status: ${response.status}`);
+        //         }
+                
+        //         const data = await response.json();
+                
+        //         if (data.success) {
+        //             showNotification('Успех', 'Файл успешно отправлен', 'success');
+        //             closeFileUploadModal();
+        //             // Добавляем сообщение о файле в чат
+        //             addFileMessageToChat(selectedFile.name, `${API_BASE_URL}${data.fileUrl}`);
+        //         } else {
+        //             showNotification('Ошибка', data.error || 'Не удалось отправить файл', 'error');
+        //         }
+                
+        //     } catch (error) {
+        //         console.error('Ошибка отправки файла:', error);
+                
+        //         if (error.message.includes('404')) {
+        //             showNotification('Ошибка', 'Функция отправки файлов не настроена на сервере', 'error');
+        //         } else if (error.message.includes('413')) {
+        //             showNotification('Ошибка', 'Файл слишком большой', 'error');
+        //         } else {
+        //             showNotification('Ошибка', 'Ошибка при отправке файла', 'error');
+        //         }
+        //     }
+        // }
+
         async function sendFile() {
             if (!selectedFile || !currentContact) {
                 showNotification('Ошибка', 'Файл не выбран или чат не выбран', 'error');
@@ -4950,42 +4999,51 @@
             try {
                 const formData = new FormData();
                 formData.append('file', selectedFile);
-                formData.append('senderId', currentUser.id);
-                formData.append('receiverId', currentContact.id);
+                formData.append('senderId', currentUser.id.toString());
+                formData.append('receiverId', currentContact.id.toString());
                 formData.append('fileName', selectedFile.name);
+                
+                console.log('Отправка файла:', selectedFile.name);
+                console.log('Размер файла:', selectedFile.size);
+                console.log('Тип файла:', selectedFile.type);
                 
                 showNotification('Информация', 'Файл отправляется...', 'info');
                 
                 const response = await fetch(`${API_BASE_URL}/api/send-file`, {
                     method: 'POST',
                     body: formData
+                    // Не добавляйте Content-Type header - браузер установит его автоматически с boundary
                 });
+                
+                console.log('Статус ответа:', response.status);
+                console.log('Статус текст:', response.statusText);
                 
                 // Проверяем статус ответа
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text();
+                    console.error('Текст ошибки:', errorText);
+                    throw new Error(`HTTP error! status: ${response.status}, text: ${errorText}`);
                 }
                 
                 const data = await response.json();
+                console.log('Ответ сервера:', data);
                 
                 if (data.success) {
                     showNotification('Успех', 'Файл успешно отправлен', 'success');
                     closeFileUploadModal();
-                    // Добавляем сообщение о файле в чат
-                    addFileMessageToChat(selectedFile.name, `${API_BASE_URL}${data.fileUrl}`);
                 } else {
                     showNotification('Ошибка', data.error || 'Не удалось отправить файл', 'error');
                 }
                 
             } catch (error) {
-                console.error('Ошибка отправки файла:', error);
+                console.error('Полная ошибка отправки файла:', error);
                 
-                if (error.message.includes('404')) {
-                    showNotification('Ошибка', 'Функция отправки файлов не настроена на сервере', 'error');
+                if (error.message.includes('500')) {
+                    showNotification('Ошибка', 'Ошибка на сервере. Проверьте логи сервера.', 'error');
                 } else if (error.message.includes('413')) {
-                    showNotification('Ошибка', 'Файл слишком большой', 'error');
+                    showNotification('Ошибка', 'Файл слишком большой (максимум 40MB)', 'error');
                 } else {
-                    showNotification('Ошибка', 'Ошибка при отправке файла', 'error');
+                    showNotification('Ошибка', 'Ошибка при отправке файла: ' + error.message, 'error');
                 }
             }
         }
@@ -5179,6 +5237,7 @@
     </script>
 </body>
 </html>
+
 
 
 
