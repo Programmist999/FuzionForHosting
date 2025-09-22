@@ -3205,14 +3205,17 @@
         }
 
         function handleNewFileMessage(data) {
-            const { receiverId, messageData } = data;
-            const receiverWs = userConnections.get(receiverId.toString());
+            const { messageData } = data;
             
-            if (receiverWs && receiverWs.readyState === WebSocket.OPEN) {
-                receiverWs.send(JSON.stringify({
-                    type: 'new-message',
-                    message: messageData
-                }));
+            // Проверяем, что это сообщение для текущего чата
+            if (currentContact && messageData.sender_id == currentContact.id) {
+                // Создаем и добавляем элемент файла в чат
+                const fileMessageElement = createFileMessageElement(messageData);
+                const messagesContainer = document.getElementById('messages-container');
+                const inputArea = messagesContainer.querySelector('.input-area');
+                
+                messagesContainer.insertBefore(fileMessageElement, inputArea);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
         }
                 
@@ -5245,6 +5248,7 @@
     </script>
 </body>
 </html>
+
 
 
 
