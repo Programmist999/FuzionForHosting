@@ -316,7 +316,6 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
         const file = req.file;
 
         if (!senderId || !receiverId || !file) {
-            // Удаляем файл если есть ошибка
             if (file && fs.existsSync(file.path)) {
                 fs.unlinkSync(file.path);
             }
@@ -339,13 +338,12 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
                 'file', 
                 fileUrl, 
                 fileName,
-                file.size // Сохраняем размер файла
+                file.size
             ],
             function(err) {
                 if (err) {
                     console.error('Ошибка сохранения файла в БД:', err);
                     
-                    // Удаляем файл если не удалось сохранить в БД
                     if (fs.existsSync(file.path)) {
                         fs.unlinkSync(file.path);
                     }
@@ -356,7 +354,7 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
                     });
                 }
 
-                // Получаем полную информацию о сообщении для отправки клиенту
+                // Получаем полную информацию о сообщении
                 db.get(
                     `SELECT m.*, u.username as sender_username, u.name as sender_name, u.avatar as sender_avatar
                      FROM messages m
@@ -372,6 +370,16 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
                             });
                         }
 
+                        // ✅ ВОТ ТУДА ДОБАВЛЯЕМ ОТПРАВКУ УВЕДОМЛЕНИЯ ПОЛУЧАТЕЛЮ
+                        const receiverWs = userConnections.get(receiverId.toString());
+                        if (receiverWs && receiverWs.readyState === WebSocket.OPEN) {
+                            receiverWs.send(JSON.stringify({
+                                type: 'new-file-message',
+                                receiverId: receiverId,
+                                messageData: messageWithDetails
+                            }));
+                        }
+
                         res.json({ 
                             success: true,
                             message: 'Файл успешно отправлен',
@@ -385,7 +393,6 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
     } catch (error) {
         console.error('Ошибка отправки файла:', error);
         
-        // Удаляем файл в случае ошибки
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
@@ -929,6 +936,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
