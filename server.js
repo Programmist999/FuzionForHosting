@@ -311,34 +311,36 @@ foldersToCreate.forEach(folder => {
 });
 
 app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
-    console.log('=== Начало обработки файла ===');
-    console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
-    console.log('File:', req.file);
-    
     try {
         const { senderId, receiverId, fileName } = req.body;
         const file = req.file;
 
-        console.log('Полученные данные:', { senderId, receiverId, fileName });
-
         if (!senderId || !receiverId || !file) {
-            console.log('Отсутствуют обязательные поля');
+            // Удаляем файл если есть ошибка
+            if (file && fs.existsSync(file.path)) {
+                fs.unlinkSync(file.path);
+            }
             return res.status(400).json({ 
                 success: false, 
                 error: 'Отсутствуют обязательные поля' 
             });
         }
 
-        // Создаем URL для доступа к файлу
         const fileUrl = `/uploads/files/${file.filename}`;
-        console.log('Создан fileUrl:', fileUrl);
 
         // Сохраняем информацию о файле в базу
         db.run(
-            `INSERT INTO messages (sender_id, receiver_id, message_text, message_type, file_url, file_name) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [senderId, receiverId, `Отправлен файл: ${fileName}`, 'file', fileUrl, fileName],
+            `INSERT INTO messages (sender_id, receiver_id, message_text, message_type, file_url, file_name, file_size) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+                senderId, 
+                receiverId, 
+                `Отправлен файл: ${fileName}`, 
+                'file', 
+                fileUrl, 
+                fileName,
+                file.size // Сохраняем размер файла
+            ],
             function(err) {
                 if (err) {
                     console.error('Ошибка сохранения файла в БД:', err);
@@ -350,24 +352,38 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
                     
                     return res.status(500).json({ 
                         success: false, 
-                        error: 'Ошибка при сохранении файла в БД: ' + err.message 
+                        error: 'Ошибка при сохранении файла в БД' 
                     });
                 }
 
-                console.log('Файл успешно сохранен в БД, ID:', this.lastID);
-                
-                res.json({ 
-                    success: true,
-                    message: 'Файл отправлен',
-                    fileUrl: fileUrl,
-                    fileName: fileName
-                });
+                // Получаем полную информацию о сообщении для отправки клиенту
+                db.get(
+                    `SELECT m.*, u.username as sender_username, u.name as sender_name, u.avatar as sender_avatar
+                     FROM messages m
+                     JOIN users u ON m.sender_id = u.id
+                     WHERE m.id = ?`,
+                    [this.lastID],
+                    (err, messageWithDetails) => {
+                        if (err) {
+                            console.error('Ошибка получения данных сообщения:', err);
+                            return res.status(500).json({ 
+                                success: false, 
+                                error: 'Ошибка при получении данных сообщения' 
+                            });
+                        }
+
+                        res.json({ 
+                            success: true,
+                            message: 'Файл успешно отправлен',
+                            messageData: messageWithDetails
+                        });
+                    }
+                );
             }
         );
 
     } catch (error) {
         console.error('Ошибка отправки файла:', error);
-        console.error('Stack:', error.stack);
         
         // Удаляем файл в случае ошибки
         if (req.file && fs.existsSync(req.file.path)) {
@@ -376,11 +392,10 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
         
         res.status(500).json({ 
             success: false, 
-            error: 'Внутренняя ошибка сервера: ' + error.message 
+            error: 'Ошибка при обработке файла' 
         });
     }
 });
-
 // Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
     if (err) {
@@ -914,6 +929,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
