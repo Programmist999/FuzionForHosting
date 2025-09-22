@@ -296,12 +296,34 @@ setInterval(() => {
     }
 }, 60000);
 
+const foldersToCreate = [
+    path.join(__dirname, 'uploads'),
+    path.join(__dirname, 'uploads', 'audio'),
+    path.join(__dirname, 'uploads', 'files'),
+    path.join(__dirname, 'uploads', 'avatars')
+];
+
+foldersToCreate.forEach(folder => {
+    if (!fs.existsSync(folder)) {
+        fs.mkdirSync(folder, { recursive: true });
+        console.log('Создана папка:', folder);
+    }
+});
+
 app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
+    console.log('=== Начало обработки файла ===');
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    console.log('File:', req.file);
+    
     try {
         const { senderId, receiverId, fileName } = req.body;
         const file = req.file;
 
+        console.log('Полученные данные:', { senderId, receiverId, fileName });
+
         if (!senderId || !receiverId || !file) {
+            console.log('Отсутствуют обязательные поля');
             return res.status(400).json({ 
                 success: false, 
                 error: 'Отсутствуют обязательные поля' 
@@ -310,6 +332,7 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
 
         // Создаем URL для доступа к файлу
         const fileUrl = `/uploads/files/${file.filename}`;
+        console.log('Создан fileUrl:', fileUrl);
 
         // Сохраняем информацию о файле в базу
         db.run(
@@ -321,14 +344,18 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
                     console.error('Ошибка сохранения файла в БД:', err);
                     
                     // Удаляем файл если не удалось сохранить в БД
-                    fs.unlinkSync(file.path);
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
                     
                     return res.status(500).json({ 
                         success: false, 
-                        error: 'Ошибка при сохранении файла' 
+                        error: 'Ошибка при сохранении файла в БД: ' + err.message 
                     });
                 }
 
+                console.log('Файл успешно сохранен в БД, ID:', this.lastID);
+                
                 res.json({ 
                     success: true,
                     message: 'Файл отправлен',
@@ -340,15 +367,16 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
 
     } catch (error) {
         console.error('Ошибка отправки файла:', error);
+        console.error('Stack:', error.stack);
         
         // Удаляем файл в случае ошибки
-        if (req.file) {
+        if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
         
         res.status(500).json({ 
             success: false, 
-            error: 'Ошибка при обработке файла' 
+            error: 'Внутренняя ошибка сервера: ' + error.message 
         });
     }
 });
@@ -409,6 +437,8 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                     receiver_id INTEGER NOT NULL,
                     message_text TEXT,
                     audio_url TEXT,
+                    file_url TEXT,
+                    file_name TEXT,
                     duration INTEGER,
                     message_type TEXT DEFAULT 'text',
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -884,6 +914,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
