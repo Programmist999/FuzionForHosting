@@ -20,6 +20,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cors());
 app.use(express.static('public'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/files', express.static(path.join(__dirname, 'uploads', 'files')));
 
 // Хранилище WebSocket соединений
 const userConnections = new Map();
@@ -311,10 +312,13 @@ foldersToCreate.forEach(folder => {
 });
 
 app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
+    console.log('Обработка отправки файла...');
+    
     try {
         const { senderId, receiverId, fileName } = req.body;
         const file = req.file;
 
+        // Проверка обязательных полей
         if (!senderId || !receiverId || !file) {
             if (file && fs.existsSync(file.path)) {
                 fs.unlinkSync(file.path);
@@ -370,7 +374,7 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
                             });
                         }
 
-                        // ✅ ВОТ ТУДА ДОБАВЛЯЕМ ОТПРАВКУ УВЕДОМЛЕНИЯ ПОЛУЧАТЕЛЮ
+                        // Уведомляем получателя через WebSocket
                         const receiverWs = userConnections.get(receiverId.toString());
                         if (receiverWs && receiverWs.readyState === WebSocket.OPEN) {
                             receiverWs.send(JSON.stringify({
@@ -453,7 +457,7 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                 console.log('Старая таблица messages удалена');
                 
                 // Создаем новую таблицу с полем audio_url
-                db.run(`CREATE TABLE messages (
+                db.run(`CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sender_id INTEGER NOT NULL,
                     receiver_id INTEGER NOT NULL,
@@ -461,6 +465,7 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                     audio_url TEXT,
                     file_url TEXT,
                     file_name TEXT,
+                    file_size INTEGER,
                     duration INTEGER,
                     message_type TEXT DEFAULT 'text',
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -936,6 +941,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
