@@ -25,6 +25,30 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const userConnections = new Map();
 const activeCalls = new Map();
 
+const filesDir = path.join(__dirname, 'uploads', 'files');
+if (!fs.existsSync(filesDir)) {
+    fs.mkdirSync(filesDir, { recursive: true });
+}
+
+// Настройка multer для файлов
+const fileStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, filesDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'file-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const fileUpload = multer({ 
+    storage: fileStorage,
+    limits: {
+        fileSize: 40 * 1024 * 1024 // 40MB limit
+    }
+});
+
+
 // WebSocket обработка
 wss.on('connection', (ws, request) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
@@ -271,6 +295,63 @@ setInterval(() => {
         }
     }
 }, 60000);
+
+app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
+    try {
+        const { senderId, receiverId, fileName } = req.body;
+        const file = req.file;
+
+        if (!senderId || !receiverId || !file) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Отсутствуют обязательные поля' 
+            });
+        }
+
+        // Создаем URL для доступа к файлу
+        const fileUrl = `/uploads/files/${file.filename}`;
+
+        // Сохраняем информацию о файле в базу
+        db.run(
+            `INSERT INTO messages (sender_id, receiver_id, message_text, message_type, file_url, file_name) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [senderId, receiverId, `Отправлен файл: ${fileName}`, 'file', fileUrl, fileName],
+            function(err) {
+                if (err) {
+                    console.error('Ошибка сохранения файла в БД:', err);
+                    
+                    // Удаляем файл если не удалось сохранить в БД
+                    fs.unlinkSync(file.path);
+                    
+                    return res.status(500).json({ 
+                        success: false, 
+                        error: 'Ошибка при сохранении файла' 
+                    });
+                }
+
+                res.json({ 
+                    success: true,
+                    message: 'Файл отправлен',
+                    fileUrl: fileUrl,
+                    fileName: fileName
+                });
+            }
+        );
+
+    } catch (error) {
+        console.error('Ошибка отправки файла:', error);
+        
+        // Удаляем файл в случае ошибки
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        
+        res.status(500).json({ 
+            success: false, 
+            error: 'Ошибка при обработке файла' 
+        });
+    }
+});
 
 // Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
@@ -534,13 +615,7 @@ app.post('/api/login', (req, res) => {
     );
 });
 
-app.post('/api/update-profile', (req, res) => {
-    const { userId, name, avatar } = req.body;
-    
-    if (!userId) {
-        return res.status(400).json({ success: false, error: 'ID пользователя обязательно' });
-    }
-    
+function updateUserInDB(userId, name, avatar, res) {
     db.run(
         'UPDATE users SET name = COALESCE(?, name), avatar = COALESCE(?, avatar) WHERE id = ?',
         [name, avatar, userId],
@@ -567,7 +642,45 @@ app.post('/api/update-profile', (req, res) => {
             );
         }
     );
+}
+
+app.post('/api/update-profile', (req, res) => {
+    const { userId, name, avatar } = req.body;
+    
+    if (!userId) {
+        return res.status(400).json({ success: false, error: 'ID пользователя обязательно' });
+    }
+    
+    // Если avatar - это data URL, сохраняем его как файл
+    if (avatar && avatar.startsWith('data:image')) {
+        // Сохраняем base64 изображение как файл
+        const matches = avatar.match(/^data:image\/([A-Za-z-+/]+);base64,(.+)$/);
+        
+        if (matches && matches.length === 3) {
+            const extension = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+            const imageBuffer = Buffer.from(matches[2], 'base64');
+            const filename = `avatar-${userId}-${Date.now()}.${extension}`;
+            const avatarPath = path.join(__dirname, 'uploads', 'avatars', filename);
+            
+            // Создаем папку если не существует
+            const avatarsDir = path.join(__dirname, 'uploads', 'avatars');
+            if (!fs.existsSync(avatarsDir)) {
+                fs.mkdirSync(avatarsDir, { recursive: true });
+            }
+            
+            fs.writeFileSync(avatarPath, imageBuffer);
+            const avatarUrl = `/uploads/avatars/${filename}`;
+            
+            // Обновляем профиль с новым URL аватара
+            updateUserInDB(userId, name, avatarUrl, res);
+            return;
+        }
+    }
+    
+    // Если avatar - это обычный URL или null
+    updateUserInDB(userId, name, avatar, res);
 });
+
 
 app.get('/api/users', (req, res) => {
     db.all(
@@ -747,6 +860,9 @@ app.use((err, req, res, next) => {
     res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
 });
 
+app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads', 'avatars')));
+app.use('/uploads/files', express.static(path.join(__dirname, 'uploads', 'files')));
+
 // Запуск сервера
 server.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
@@ -768,6 +884,7 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
 
