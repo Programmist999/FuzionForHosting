@@ -909,6 +909,7 @@
             gap: 15px;
             margin-top: 30px;
             flex-wrap: wrap;
+            flex-direction: column; /* Изменяем на колонку */
         }
         
         .profile-btn {
@@ -1653,6 +1654,17 @@
             background: linear-gradient(180deg, #7a64ff 0%, #c850c0 100%);
         }
 
+        .logout-btn {
+            background: linear-gradient(90deg, #ff3366 0%, #ff7733 100%);
+            color: white;
+            margin-top: 15px;
+        }
+        
+        .logout-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(255, 51, 102, 0.4);
+        }
+
         .incoming-call-box {
             text-align: center;
             max-width: 400px;
@@ -1703,6 +1715,119 @@
         .call-btn:hover {
             transform: translateY(-3px);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .file-drop-area {
+            border: 2px dashed rgba(101, 78, 163, 0.5);
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            background: rgba(13, 15, 35, 0.3);
+        }
+        
+        .file-drop-area:hover {
+            border-color: #7a64ff;
+            background: rgba(13, 15, 35, 0.5);
+        }
+        
+        .file-drop-area.dragover {
+            border-color: #7a64ff;
+            background: rgba(122, 100, 255, 0.1);
+            transform: scale(1.02);
+        }
+        
+        .file-drop-area i {
+            font-size: 48px;
+            color: #7a64ff;
+            margin-bottom: 15px;
+        }
+        
+        .file-drop-area p {
+            color: #a594fe;
+            margin-bottom: 15px;
+        }
+        
+        .file-browse-btn {
+            background: linear-gradient(90deg, #7a64ff 0%, #c850c0 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        .file-browse-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(122, 100, 255, 0.3);
+        }
+        
+        .file-info {
+            font-size: 12px;
+            color: #5a5a8c;
+            margin-top: 10px;
+        }
+        
+        .file-preview {
+            margin-top: 20px;
+        }
+        
+        .file-preview-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: rgba(38, 41, 85, 0.5);
+            border-radius: 12px;
+            border: 1px solid rgba(101, 78, 163, 0.3);
+        }
+        
+        .file-preview-item i {
+            font-size: 24px;
+            color: #7a64ff;
+            margin-right: 15px;
+        }
+        
+        .file-info {
+            flex: 1;
+        }
+        
+        .file-name {
+            display: block;
+            color: white;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .file-size {
+            color: #a594fe;
+            font-size: 12px;
+        }
+        
+        .file-remove {
+            background: rgba(255, 77, 79, 0.2);
+            border: 1px solid #ff4d4f;
+            color: #ff4d4f;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .file-remove:hover {
+            background: rgba(255, 77, 79, 0.3);
+            transform: scale(1.1);
+        }
+        
+        .file-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            justify-content: flex-end;
         }
 
         .typing-indicator {
@@ -2193,6 +2318,9 @@
             <div class="profile-buttons">
                 <button class="profile-btn cancel-btn" id="profile-cancel">Отмена</button>
                 <button class="profile-btn save-btn" id="profile-save">Сохранить</button>
+                <button class="profile-btn logout-btn" id="profile-logout">
+                    <i class="fas fa-sign-out-alt"></i> Выйти из аккаунта
+                </button>
             </div>
         </div>
     </div>
@@ -2257,6 +2385,45 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="file-upload-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>Прикрепить файл</h2>
+                <button class="modal-close" id="close-file-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="file-drop-area" id="file-drop-area">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Перетащите файл сюда или</p>
+                    <label for="file-input" class="file-browse-btn">Выберите файл</label>
+                    <input type="file" id="file-input" style="display: none;">
+                    <p class="file-info">Максимальный размер: 40MB</p>
+                </div>
+                
+                <div class="file-preview" id="file-preview" style="display: none;">
+                    <div class="file-preview-item">
+                        <i class="fas fa-file"></i>
+                        <div class="file-info">
+                            <span class="file-name" id="file-name"></span>
+                            <span class="file-size" id="file-size"></span>
+                        </div>
+                        <button class="file-remove" id="file-remove">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="file-actions">
+                    <button class="profile-btn cancel-btn" id="cancel-file">Отмена</button>
+                    <button class="profile-btn save-btn" id="send-file" disabled>Отправить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
@@ -2273,6 +2440,7 @@
         let searchTimeout = null;
         let messageCheckInterval = null;
         let websocket = null;
+        let selectedFile = null;
 
         // ===== ПЕРЕМЕННЫЕ ДЛЯ ЗАПИСИ =====
         let mediaRecorder = null;
@@ -4469,7 +4637,8 @@
                 if (profileAvatar) {
                     profileAvatar.src = avatarData;
                 }
-                updateUserProfile(currentUser.name, avatarData);
+                // Сохраняем временно, но не обновляем профиль до сохранения
+                window.tempAvatar = avatarData;
             };
             reader.onerror = function() {
                 showNotification('Ошибка', 'Не удалось загрузить изображение', 'error');
@@ -4555,8 +4724,11 @@
         
         async function saveProfileSettings() {
             const newName = document.getElementById('profile-name').value.trim();
-            const success = await updateUserProfile(newName, currentUser.avatar);
+            const avatarData = window.tempAvatar || currentUser.avatar;
+            
+            const success = await updateUserProfile(newName, avatarData);
             if (success) {
+                delete window.tempAvatar;
                 hideProfileSettings();
             }
         }
@@ -4653,6 +4825,180 @@
             `;
         }
 
+        function openFileUploadModal() {
+            document.getElementById('file-upload-modal').classList.add('active');
+        }
+        
+        function closeFileUploadModal() {
+            document.getElementById('file-upload-modal').classList.remove('active');
+            removeSelectedFile();
+        }
+        
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processSelectedFile(file);
+            }
+        }
+        
+        function processSelectedFile(file) {
+            // Проверка размера файла (40MB)
+            if (file.size > 40 * 1024 * 1024) {
+                showNotification('Ошибка', 'Размер файла не должен превышать 40MB', 'error');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // Показываем превью файла
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('file-size').textContent = formatFileSize(file.size);
+            document.getElementById('file-preview').style.display = 'block';
+            document.getElementById('send-file').disabled = false;
+            
+            // Добавляем иконку в зависимости от типа файла
+            const icon = getFileIcon(file);
+            document.querySelector('.file-preview-item i').className = `fas ${icon}`;
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function getFileIcon(file) {
+            const extension = file.name.split('.').pop().toLowerCase();
+            const fileIcons = {
+                'pdf': 'fa-file-pdf',
+                'doc': 'fa-file-word',
+                'docx': 'fa-file-word',
+                'xls': 'fa-file-excel',
+                'xlsx': 'fa-file-excel',
+                'ppt': 'fa-file-powerpoint',
+                'pptx': 'fa-file-powerpoint',
+                'zip': 'fa-file-archive',
+                'rar': 'fa-file-archive',
+                'jpg': 'fa-file-image',
+                'jpeg': 'fa-file-image',
+                'png': 'fa-file-image',
+                'gif': 'fa-file-image',
+                'mp3': 'fa-file-audio',
+                'wav': 'fa-file-audio',
+                'mp4': 'fa-file-video',
+                'avi': 'fa-file-video'
+            };
+            
+            return fileIcons[extension] || 'fa-file';
+        }
+        
+        function removeSelectedFile() {
+            selectedFile = null;
+            document.getElementById('file-input').value = '';
+            document.getElementById('file-preview').style.display = 'none';
+            document.getElementById('send-file').disabled = true;
+        }
+        
+        function setupFileDropArea() {
+            const dropArea = document.getElementById('file-drop-area');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropArea.classList.add('dragover');
+            }
+            
+            function unhighlight() {
+                dropArea.classList.remove('dragover');
+            }
+            
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0) {
+                    processSelectedFile(files[0]);
+                }
+            }
+        }
+        
+        async function sendFile() {
+            if (!selectedFile || !currentContact) {
+                showNotification('Ошибка', 'Файл не выбран или чат не выбран', 'error');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('senderId', currentUser.id);
+                formData.append('receiverId', currentContact.id);
+                formData.append('fileName', selectedFile.name);
+                
+                showNotification('Информация', 'Файл отправляется...', 'info');
+                
+                const response = await fetch(`${API_BASE_URL}/api/send-file`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Успех', 'Файл успешно отправлен', 'success');
+                    closeFileUploadModal();
+                    // Можно добавить сообщение в чат о отправке файла
+                    addFileMessageToChat(selectedFile.name, data.fileUrl);
+                } else {
+                    showNotification('Ошибка', data.error || 'Не удалось отправить файл', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Ошибка отправки файла:', error);
+                showNotification('Ошибка', 'Ошибка при отправке файла', 'error');
+            }
+        }
+        
+        function addFileMessageToChat(fileName, fileUrl) {
+            // Добавляем сообщение о файле в чат
+            const messageElement = document.createElement('div');
+            messageElement.className = `message message-outgoing`;
+            messageElement.innerHTML = `
+                <div class="file-message">
+                    <i class="fas ${getFileIcon({name: fileName})}"></i>
+                    <div class="file-info">
+                        <a href="${fileUrl}" target="_blank" class="file-name">${fileName}</a>
+                        <span class="file-type">Файл</span>
+                    </div>
+                </div>
+                <div class="message-time">${new Date().toLocaleTimeString()}</div>
+            `;
+            
+            const messagesContainer = document.getElementById('messages-container');
+            const inputArea = messagesContainer.querySelector('.input-area');
+            messagesContainer.insertBefore(messageElement, inputArea);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
         function setupEventListeners() {
             if (eventListenersInitialized) {
                 console.log('Event listeners already initialized');
@@ -4663,6 +5009,17 @@
             removeAllEventListeners();
             
             // Основные обработчики
+            document.getElementById('profile-logout').addEventListener('click', function() {
+                hideProfileSettings();
+                setTimeout(logoutUser, 300);
+            });
+            document.querySelector('.attach-btn').addEventListener('click', openFileUploadModal);
+            document.getElementById('close-file-modal').addEventListener('click', closeFileUploadModal);
+            document.getElementById('cancel-file').addEventListener('click', closeFileUploadModal);
+            document.getElementById('file-input').addEventListener('change', handleFileSelect);
+            document.getElementById('file-remove').addEventListener('click', removeSelectedFile);
+            document.getElementById('send-file').addEventListener('click', sendFile);
+            setupFileDropArea();
             document.getElementById('close-search-modal').addEventListener('click', closeSearchModal);
             document.querySelector('.new-chat-btn').addEventListener('click', openSearchModal);
             document.getElementById('login-btn').addEventListener('click', handleLogin);
@@ -4810,6 +5167,7 @@
     </script>
 </body>
 </html>
+
 
 
 
