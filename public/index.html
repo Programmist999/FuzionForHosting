@@ -2810,8 +2810,6 @@
         }
         
         function getFileIcon(filename) {
-            if (!filename) return 'fa-file';
-            
             const extension = filename.split('.').pop().toLowerCase();
             const fileIcons = {
                 'pdf': 'fa-file-pdf',
@@ -2843,7 +2841,8 @@
         }
         
         function formatFileSize(bytes) {
-            if (!bytes || bytes === 0) return '0 Bytes';
+            if (!bytes) return '';
+            if (bytes === 0) return '0 Bytes';
             const k = 1024;
             const sizes = ['Bytes', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -4243,22 +4242,21 @@
             messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
             
             const fileIcon = getFileIcon(message.file_name);
-            const fileName = message.file_name || 'Безымянный файл';
-            const fileSize = message.file_size ? formatFileSize(message.file_size) : 'Неизвестный размер';
-            const fileUrl = message.file_url || '#';
-        
+            const fileSize = message.file_size ? formatFileSize(message.file_size) : '';
+            
             messageElement.innerHTML = `
                 <div class="file-message-container">
                     <div class="file-icon">
                         <i class="fas ${fileIcon}"></i>
                     </div>
                     <div class="file-info">
-                        <div class="file-name">${escapeHtml(fileName)}</div>
+                        <div class="file-name">${escapeHtml(message.file_name)}</div>
                         <div class="file-details">
                             <span class="file-size">${fileSize}</span>
+                            <span class="file-type">${getFileType(message.file_name)}</span>
                         </div>
                     </div>
-                    <a href="${fileUrl}" class="file-download-btn" download>
+                    <a href="${message.file_url}" class="file-download-btn" download>
                         <i class="fas fa-download"></i>
                     </a>
                 </div>
@@ -5074,35 +5072,24 @@
                     body: formData
                 });
                 
-                // Проверяем статус ответа
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
                 const data = await response.json();
                 
                 if (data.success) {
                     showNotification('Успех', 'Файл успешно отправлен', 'success');
                     closeFileUploadModal();
                     
-                    // Добавляем проверку на наличие данных сообщения
+                    // Если сервер вернул данные сообщения, добавляем его в чат
                     if (data.messageData) {
-                        // Убедимся, что file_name существует
-                        if (!data.messageData.file_name) {
-                            data.messageData.file_name = selectedFile.name;
-                        }
-                        if (!data.messageData.file_size) {
-                            data.messageData.file_size = selectedFile.size;
-                        }
-                        
+                        // Создаем элемент сообщения с файлом
                         const fileMessageElement = createFileMessageElement(data.messageData);
                         const messagesContainer = document.getElementById('messages-container');
                         const inputArea = messagesContainer.querySelector('.input-area');
                         
+                        // Добавляем сообщение перед input-area
                         messagesContainer.insertBefore(fileMessageElement, inputArea);
                         messagesContainer.scrollTop = messagesContainer.scrollHeight;
                     } else {
+                        // Если данных нет, просто перезагружаем сообщения
                         await loadMessages();
                     }
                 } else {
@@ -5261,17 +5248,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
