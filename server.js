@@ -310,7 +310,6 @@ foldersToCreate.forEach(folder => {
         console.log('Создана папка:', folder);
     }
 });
-
 app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
     console.log('Обработка отправки файла...');
     
@@ -354,7 +353,7 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
                     
                     return res.status(500).json({ 
                         success: false, 
-                        error: 'Ошибка при сохранении файла в БД' 
+                        error: 'Ошибка при сохранении файла в БД: ' + err.message 
                     });
                 }
 
@@ -403,10 +402,61 @@ app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
         
         res.status(500).json({ 
             success: false, 
-            error: 'Ошибка при обработке файла' 
+            error: 'Ошибка при обработке файла: ' + error.message 
         });
     }
 });
+
+function checkAndUpdateMessagesTable() {
+    return new Promise((resolve, reject) => {
+        db.all("PRAGMA table_info(messages)", (err, columns) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+
+            const columnNames = columns.map(col => col.name);
+            const missingColumns = [];
+
+            // Проверяем необходимые колонки для файлов
+            if (!columnNames.includes('file_url')) missingColumns.push('file_url TEXT');
+            if (!columnNames.includes('file_name')) missingColumns.push('file_name TEXT');
+            if (!columnNames.includes('file_size')) missingColumns.push('file_size INTEGER');
+
+            if (missingColumns.length > 0) {
+                console.log('Добавляем отсутствующие колонки:', missingColumns);
+                
+                // Добавляем колонки по одной
+                const addColumnPromises = missingColumns.map(columnDef => {
+                    return new Promise((resolveCol, rejectCol) => {
+                        db.run(`ALTER TABLE messages ADD COLUMN ${columnDef}`, (err) => {
+                            if (err) {
+                                console.error('Ошибка добавления колонки:', err);
+                                rejectCol(err);
+                            } else {
+                                console.log('Колонка добавлена:', columnDef);
+                                resolveCol();
+                            }
+                        });
+                    });
+                });
+
+                Promise.all(addColumnPromises)
+                    .then(() => resolve())
+                    .catch(reject);
+            } else {
+                console.log('Все необходимые колонки присутствуют');
+                resolve();
+            }
+        });
+    });
+}
+
+// Вызовем эту функцию при запуске сервера
+db.serialize(() => {
+    checkAndUpdateMessagesTable().catch(console.error);
+});
+
 // Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
     if (err) {
