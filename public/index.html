@@ -2810,57 +2810,44 @@
         }
         
         function getFileIcon(filename) {
-            if (!filename || typeof filename !== 'string') {
-                return 'fa-file'; // Возвращаем иконку по умолчанию
-            }
+            if (!filename) return 'fa-file';
             
-            try {
-                const extension = filename.split('.').pop().toLowerCase();
-                const fileIcons = {
-                    'pdf': 'fa-file-pdf',
-                    'doc': 'fa-file-word',
-                    'docx': 'fa-file-word',
-                    'xls': 'fa-file-excel',
-                    'xlsx': 'fa-file-excel',
-                    'ppt': 'fa-file-powerpoint',
-                    'pptx': 'fa-file-powerpoint',
-                    'zip': 'fa-file-archive',
-                    'rar': 'fa-file-archive',
-                    '7z': 'fa-file-archive',
-                    'jpg': 'fa-file-image',
-                    'jpeg': 'fa-file-image',
-                    'png': 'fa-file-image',
-                    'gif': 'fa-file-image',
-                    'mp3': 'fa-file-audio',
-                    'wav': 'fa-file-audio',
-                    'mp4': 'fa-file-video',
-                    'avi': 'fa-file-video',
-                    'mov': 'fa-file-video',
-                    'txt': 'fa-file-alt',
-                    'html': 'fa-file-code',
-                    'css': 'fa-file-code',
-                    'js': 'fa-file-code'
-                };
-                
-                return fileIcons[extension] || 'fa-file';
-            } catch (error) {
-                console.error('Ошибка в getFileIcon:', error);
-                return 'fa-file';
-            }
-}
+            const extension = filename.split('.').pop().toLowerCase();
+            const fileIcons = {
+                'pdf': 'fa-file-pdf',
+                'doc': 'fa-file-word',
+                'docx': 'fa-file-word',
+                'xls': 'fa-file-excel',
+                'xlsx': 'fa-file-excel',
+                'ppt': 'fa-file-powerpoint',
+                'pptx': 'fa-file-powerpoint',
+                'zip': 'fa-file-archive',
+                'rar': 'fa-file-archive',
+                '7z': 'fa-file-archive',
+                'jpg': 'fa-file-image',
+                'jpeg': 'fa-file-image',
+                'png': 'fa-file-image',
+                'gif': 'fa-file-image',
+                'mp3': 'fa-file-audio',
+                'wav': 'fa-file-audio',
+                'mp4': 'fa-file-video',
+                'avi': 'fa-file-video',
+                'mov': 'fa-file-video',
+                'txt': 'fa-file-alt',
+                'html': 'fa-file-code',
+                'css': 'fa-file-code',
+                'js': 'fa-file-code'
+            };
+            
+            return fileIcons[extension] || 'fa-file';
+        }
         
         function formatFileSize(bytes) {
-            if (!bytes || bytes === 0 || isNaN(bytes)) return '0 Bytes';
-            
-            try {
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-            } catch (error) {
-                console.error('Ошибка в formatFileSize:', error);
-                return 'Неизвестный размер';
-            }
+            if (!bytes || bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
 
         function stopAllVoiceMessages() {
@@ -4250,25 +4237,15 @@
         }
 
         function createFileMessageElement(message) {
-            console.log('Создание файлового сообщения:', message);
-            
             const messageElement = document.createElement('div');
             const isOutgoing = message.sender_id == currentUser.id;
             
             messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
             
-            // Надежная защита от undefined
-            const safeMessage = {
-                file_name: message.file_name || 'Безымянный файл',
-                file_size: message.file_size || 0,
-                file_url: message.file_url || '#',
-                timestamp: message.timestamp || new Date().toISOString(),
-                sender_id: message.sender_id || 0
-            };
-            
-            const fileIcon = getFileIcon(safeMessage.file_name);
-            const fileSize = formatFileSize(safeMessage.file_size);
-            const timestamp = new Date(safeMessage.timestamp);
+            const fileIcon = getFileIcon(message.file_name);
+            const fileName = message.file_name || 'Безымянный файл';
+            const fileSize = message.file_size ? formatFileSize(message.file_size) : 'Неизвестный размер';
+            const fileUrl = message.file_url || '#';
         
             messageElement.innerHTML = `
                 <div class="file-message-container">
@@ -4276,16 +4253,16 @@
                         <i class="fas ${fileIcon}"></i>
                     </div>
                     <div class="file-info">
-                        <div class="file-name">${escapeHtml(safeMessage.file_name)}</div>
+                        <div class="file-name">${escapeHtml(fileName)}</div>
                         <div class="file-details">
                             <span class="file-size">${fileSize}</span>
                         </div>
                     </div>
-                    <a href="${safeMessage.file_url}" class="file-download-btn" download>
+                    <a href="${fileUrl}" class="file-download-btn" download>
                         <i class="fas fa-download"></i>
                     </a>
                 </div>
-                <div class="message-time">${timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="message-time">${new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
             `;
             
             return messageElement;
@@ -4293,30 +4270,44 @@
 
         function renderMessages(messages) {
             const messagesContainer = document.getElementById('messages-container');
+
+            console.log('Рендерим сообщения:', messages);
+            messages.forEach((msg, index) => {
+                if (msg.audio_url) {
+                    console.log(`Сообщение ${index}:`, msg.audio_url);
+                }
+            });
+    
+            // Останавливаем воспроизведение перед обновлением сообщений
+            stopAllVoiceMessages();
             
             // Сохраняем только input-area
             const inputArea = messagesContainer.querySelector('.input-area');
             
-            // Полностью очищаем контейнер
-            messagesContainer.innerHTML = '';
+            // Создаем временный контейнер
+            const tempContainer = document.createElement('div');
             
-            // Добавляем сообщения с проверкой
+            // Добавляем сообщения во временный контейнер
             messages.forEach(message => {
-                try {
-                    if (message.audio_url) {
-                        const voiceMessageElement = createVoiceMessageElement(message);
-                        messagesContainer.appendChild(voiceMessageElement);
-                    } else if (message.file_url || message.file_name) {
-                        const fileMessageElement = createFileMessageElement(message);
-                        messagesContainer.appendChild(fileMessageElement);
-                    } else if (message.message_text) {
-                        const textMessageElement = createTextMessageElement(message);
-                        messagesContainer.appendChild(textMessageElement);
-                    }
-                } catch (error) {
-                    console.error('Ошибка создания элемента сообщения:', error, message);
+                if (message.audio_url) {
+                    const voiceMessageElement = createVoiceMessageElement(message);
+                    tempContainer.appendChild(voiceMessageElement);
+                } else if (message.file_url) {
+                    const fileMessageElement = createFileMessageElement(message);
+                    tempContainer.appendChild(fileMessageElement);
+                } else {
+                    const textMessageElement = createTextMessageElement(message);
+                    tempContainer.appendChild(textMessageElement);
                 }
             });
+            
+            // Полностью очищаем основной контейнер
+            messagesContainer.innerHTML = '';
+            
+            // Добавляем сообщения обратно
+            while (tempContainer.firstChild) {
+                messagesContainer.appendChild(tempContainer.firstChild);
+            }
             
             // Возвращаем input-area
             if (inputArea) {
@@ -4991,68 +4982,29 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
         
-        function getFileIcon(filename) {
-            // Полная защита от любых невалидных значений
-            if (!filename) {
-                console.warn('getFileIcon: filename is undefined or null');
-                return 'fa-file';
-            }
+        function getFileIcon(file) {
+            const extension = file.name.split('.').pop().toLowerCase();
+            const fileIcons = {
+                'pdf': 'fa-file-pdf',
+                'doc': 'fa-file-word',
+                'docx': 'fa-file-word',
+                'xls': 'fa-file-excel',
+                'xlsx': 'fa-file-excel',
+                'ppt': 'fa-file-powerpoint',
+                'pptx': 'fa-file-powerpoint',
+                'zip': 'fa-file-archive',
+                'rar': 'fa-file-archive',
+                'jpg': 'fa-file-image',
+                'jpeg': 'fa-file-image',
+                'png': 'fa-file-image',
+                'gif': 'fa-file-image',
+                'mp3': 'fa-file-audio',
+                'wav': 'fa-file-audio',
+                'mp4': 'fa-file-video',
+                'avi': 'fa-file-video'
+            };
             
-            if (typeof filename !== 'string') {
-                console.warn('getFileIcon: filename is not a string:', typeof filename);
-                return 'fa-file';
-            }
-            
-            if (filename.trim() === '') {
-                console.warn('getFileIcon: filename is empty string');
-                return 'fa-file';
-            }
-            
-            try {
-                // Проверяем, есть ли точка в имени файла
-                if (!filename.includes('.')) {
-                    return 'fa-file';
-                }
-                
-                const parts = filename.split('.');
-                if (parts.length < 2) {
-                    return 'fa-file';
-                }
-                
-                const extension = parts[parts.length - 1].toLowerCase();
-                
-                const fileIcons = {
-                    'pdf': 'fa-file-pdf',
-                    'doc': 'fa-file-word',
-                    'docx': 'fa-file-word',
-                    'xls': 'fa-file-excel',
-                    'xlsx': 'fa-file-excel',
-                    'ppt': 'fa-file-powerpoint',
-                    'pptx': 'fa-file-powerpoint',
-                    'zip': 'fa-file-archive',
-                    'rar': 'fa-file-archive',
-                    '7z': 'fa-file-archive',
-                    'jpg': 'fa-file-image',
-                    'jpeg': 'fa-file-image',
-                    'png': 'fa-file-image',
-                    'gif': 'fa-file-image',
-                    'mp3': 'fa-file-audio',
-                    'wav': 'fa-file-audio',
-                    'mp4': 'fa-file-video',
-                    'avi': 'fa-file-video',
-                    'mov': 'fa-file-video',
-                    'txt': 'fa-file-alt',
-                    'html': 'fa-file-code',
-                    'css': 'fa-file-code',
-                    'js': 'fa-file-code'
-                };
-                
-                return fileIcons[extension] || 'fa-file';
-                
-            } catch (error) {
-                console.error('Критическая ошибка в getFileIcon:', error);
-                return 'fa-file';
-            }
+            return fileIcons[extension] || 'fa-file';
         }
         
         function removeSelectedFile() {
@@ -5129,15 +5081,30 @@
                 }
                 
                 const data = await response.json();
-                console.log('Полный ответ сервера:', data);
                 
                 if (data.success) {
                     showNotification('Успех', 'Файл успешно отправлен', 'success');
                     closeFileUploadModal();
                     
-                    // ВАЖНО: Не создаем элемент сразу, а перезагружаем сообщения
-                    await loadMessages();
-                    
+                    // Добавляем проверку на наличие данных сообщения
+                    if (data.messageData) {
+                        // Убедимся, что file_name существует
+                        if (!data.messageData.file_name) {
+                            data.messageData.file_name = selectedFile.name;
+                        }
+                        if (!data.messageData.file_size) {
+                            data.messageData.file_size = selectedFile.size;
+                        }
+                        
+                        const fileMessageElement = createFileMessageElement(data.messageData);
+                        const messagesContainer = document.getElementById('messages-container');
+                        const inputArea = messagesContainer.querySelector('.input-area');
+                        
+                        messagesContainer.insertBefore(fileMessageElement, inputArea);
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    } else {
+                        await loadMessages();
+                    }
                 } else {
                     showNotification('Ошибка', data.error || 'Не удалось отправить файл', 'error');
                 }
@@ -5294,9 +5261,6 @@
     </script>
 </body>
 </html>
-
-
-
 
 
 
