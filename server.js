@@ -378,7 +378,7 @@ app.post('/api/send-voice-message', upload.single('audio'), async (req, res) => 
         }
 
         // Создаем URL для доступа к файлу
-        const audioUrl = `https://${req.get('host')}/uploads/audio/${audioFile.filename}`;
+        const audioUrl = `/uploads/audio/${audioFile.filename}`;
         // Сохраняем в базу данных
         db.run(
             `INSERT INTO messages (sender_id, receiver_id, audio_url, duration, message_type) 
@@ -620,15 +620,25 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
             }
             
             // Добавляем полный URL для аудиофайлов
-            const messagesWithFullUrls = messages.map(message => {
-                if (message.audio_url) {
-                    return {
-                        ...message,
-                        audio_url: `${req.protocol}://${req.get('host')}${message.audio_url}`
-                    };
-                }
-                return message;
-            });
+            // const messagesWithFullUrls = messages.map(message => {
+            //     if (message.audio_url) {
+            //         // Исправляем формирование URL
+            //         let audioUrl = message.audio_url;
+            //         // Если URL начинается с http://, заменяем на https://
+            //         if (audioUrl.startsWith('http://')) {
+            //             audioUrl = audioUrl.replace('http://', 'https://');
+            //         }
+            //         // Или если URL неправильно сформирован
+            //         if (audioUrl.includes('https//')) {
+            //             audioUrl = audioUrl.replace('https//', 'https://');
+            //         }
+            //         return {
+            //             ...message,
+            //             audio_url: audioUrl
+            //         };
+            //     }
+            //     return message;
+            // });
             
             db.run(
                 'UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0',
@@ -638,7 +648,7 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
                         console.error('Ошибка обновления статуса сообщений:', err);
                     }
                     
-                    res.json({ success: true, messages: messagesWithFullUrls });
+                    res.json({ success: true, messages: messages });
                 }
             );
         }
@@ -761,3 +771,4 @@ process.on('SIGINT', () => {
         });
     });
 });
+
