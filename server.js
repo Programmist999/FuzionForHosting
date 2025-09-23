@@ -20,35 +20,10 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cors());
 app.use(express.static('public'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/uploads/files', express.static(path.join(__dirname, 'uploads', 'files')));
 
 // Хранилище WebSocket соединений
 const userConnections = new Map();
 const activeCalls = new Map();
-
-const filesDir = path.join(__dirname, 'uploads', 'files');
-if (!fs.existsSync(filesDir)) {
-    fs.mkdirSync(filesDir, { recursive: true });
-}
-
-// Настройка multer для файлов
-const fileStorage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, filesDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'file-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
-const fileUpload = multer({ 
-    storage: fileStorage,
-    limits: {
-        fileSize: 40 * 1024 * 1024 // 40MB limit
-    }
-});
-
 
 // WebSocket обработка
 wss.on('connection', (ws, request) => {
@@ -120,13 +95,6 @@ const upload = multer({
         }
     }
 });
-
-app.use('/uploads/audio', express.static(path.join(__dirname, 'uploads', 'audio'), {
-    setHeaders: (res, path) => {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    }
-}));
 
 function handleWebSocketMessage(userId, data) {
     console.log('Received message:', data.type, 'from:', userId);
@@ -297,116 +265,6 @@ setInterval(() => {
     }
 }, 60000);
 
-const foldersToCreate = [
-    path.join(__dirname, 'uploads'),
-    path.join(__dirname, 'uploads', 'audio'),
-    path.join(__dirname, 'uploads', 'files'),
-    path.join(__dirname, 'uploads', 'avatars')
-];
-
-foldersToCreate.forEach(folder => {
-    if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder, { recursive: true });
-        console.log('Создана папка:', folder);
-    }
-});
-
-app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
-    console.log('Обработка отправки файла...');
-    
-    try {
-        const { senderId, receiverId, fileName } = req.body;
-        const file = req.file;
-
-        // Проверка обязательных полей
-        if (!senderId || !receiverId || !file) {
-            if (file && fs.existsSync(file.path)) {
-                fs.unlinkSync(file.path);
-            }
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Отсутствуют обязательные поля' 
-            });
-        }
-
-        const fileUrl = `/uploads/files/${file.filename}`;
-
-        // Сохраняем информацию о файле в базу
-        db.run(
-            `INSERT INTO messages (sender_id, receiver_id, message_text, message_type, file_url, file_name, file_size) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [
-                senderId, 
-                receiverId, 
-                `Отправлен файл: ${fileName}`, 
-                'file', 
-                fileUrl, 
-                fileName,
-                file.size
-            ],
-            function(err) {
-                if (err) {
-                    console.error('Ошибка сохранения файла в БД:', err);
-                    
-                    if (fs.existsSync(file.path)) {
-                        fs.unlinkSync(file.path);
-                    }
-                    
-                    return res.status(500).json({ 
-                        success: false, 
-                        error: 'Ошибка при сохранении файла в БД' 
-                    });
-                }
-
-                // Получаем полную информацию о сообщении
-                db.get(
-                    `SELECT m.*, u.username as sender_username, u.name as sender_name, u.avatar as sender_avatar
-                     FROM messages m
-                     JOIN users u ON m.sender_id = u.id
-                     WHERE m.id = ?`,
-                    [this.lastID],
-                    (err, messageWithDetails) => {
-                        if (err) {
-                            console.error('Ошибка получения данных сообщения:', err);
-                            return res.status(500).json({ 
-                                success: false, 
-                                error: 'Ошибка при получении данных сообщения' 
-                            });
-                        }
-
-                        // Уведомляем получателя через WebSocket
-                        const receiverWs = userConnections.get(receiverId.toString());
-                        if (receiverWs && receiverWs.readyState === WebSocket.OPEN) {
-                            receiverWs.send(JSON.stringify({
-                                type: 'new-file-message',
-                                receiverId: receiverId,
-                                messageData: messageWithDetails
-                            }));
-                        }
-
-                        res.json({ 
-                            success: true,
-                            message: 'Файл успешно отправлен',
-                            messageData: messageWithDetails
-                        });
-                    }
-                );
-            }
-        );
-
-    } catch (error) {
-        console.error('Ошибка отправки файла:', error);
-        
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-        
-        res.status(500).json({ 
-            success: false, 
-            error: 'Ошибка при обработке файла' 
-        });
-    }
-});
 // Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
     if (err) {
@@ -457,15 +315,12 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                 console.log('Старая таблица messages удалена');
                 
                 // Создаем новую таблицу с полем audio_url
-                db.run(`CREATE TABLE IF NOT EXISTS messages (
+                db.run(`CREATE TABLE messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sender_id INTEGER NOT NULL,
                     receiver_id INTEGER NOT NULL,
                     message_text TEXT,
                     audio_url TEXT,
-                    file_url TEXT,
-                    file_name TEXT,
-                    file_size INTEGER,
                     duration INTEGER,
                     message_type TEXT DEFAULT 'text',
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -523,7 +378,7 @@ app.post('/api/send-voice-message', upload.single('audio'), async (req, res) => 
         }
 
         // Создаем URL для доступа к файлу
-        const audioUrl = `/uploads/audio/${audioFile.filename}`;
+        const audioUrl = `https://${req.get('host')}/uploads/audio/${audioFile.filename}`;
         // Сохраняем в базу данных
         db.run(
             `INSERT INTO messages (sender_id, receiver_id, audio_url, duration, message_type) 
@@ -672,7 +527,13 @@ app.post('/api/login', (req, res) => {
     );
 });
 
-function updateUserInDB(userId, name, avatar, res) {
+app.post('/api/update-profile', (req, res) => {
+    const { userId, name, avatar } = req.body;
+    
+    if (!userId) {
+        return res.status(400).json({ success: false, error: 'ID пользователя обязательно' });
+    }
+    
     db.run(
         'UPDATE users SET name = COALESCE(?, name), avatar = COALESCE(?, avatar) WHERE id = ?',
         [name, avatar, userId],
@@ -699,45 +560,7 @@ function updateUserInDB(userId, name, avatar, res) {
             );
         }
     );
-}
-
-app.post('/api/update-profile', (req, res) => {
-    const { userId, name, avatar } = req.body;
-    
-    if (!userId) {
-        return res.status(400).json({ success: false, error: 'ID пользователя обязательно' });
-    }
-    
-    // Если avatar - это data URL, сохраняем его как файл
-    if (avatar && avatar.startsWith('data:image')) {
-        // Сохраняем base64 изображение как файл
-        const matches = avatar.match(/^data:image\/([A-Za-z-+/]+);base64,(.+)$/);
-        
-        if (matches && matches.length === 3) {
-            const extension = matches[1] === 'jpeg' ? 'jpg' : matches[1];
-            const imageBuffer = Buffer.from(matches[2], 'base64');
-            const filename = `avatar-${userId}-${Date.now()}.${extension}`;
-            const avatarPath = path.join(__dirname, 'uploads', 'avatars', filename);
-            
-            // Создаем папку если не существует
-            const avatarsDir = path.join(__dirname, 'uploads', 'avatars');
-            if (!fs.existsSync(avatarsDir)) {
-                fs.mkdirSync(avatarsDir, { recursive: true });
-            }
-            
-            fs.writeFileSync(avatarPath, imageBuffer);
-            const avatarUrl = `/uploads/avatars/${filename}`;
-            
-            // Обновляем профиль с новым URL аватара
-            updateUserInDB(userId, name, avatarUrl, res);
-            return;
-        }
-    }
-    
-    // Если avatar - это обычный URL или null
-    updateUserInDB(userId, name, avatar, res);
 });
-
 
 app.get('/api/users', (req, res) => {
     db.all(
@@ -797,15 +620,15 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
             }
             
             // Добавляем полный URL для аудиофайлов
-            // const messagesWithFullUrls = messages.map(message => {
-            //     if (message.audio_url) {
-            //         return {
-            //             ...message,
-            //             audio_url: `${req.protocol}://${req.get('host')}${message.audio_url}`
-            //         };
-            //     }
-            //     return message;
-            // });
+            const messagesWithFullUrls = messages.map(message => {
+                if (message.audio_url) {
+                    return {
+                        ...message,
+                        audio_url: `${req.protocol}://${req.get('host')}${message.audio_url}`
+                    };
+                }
+                return message;
+            });
             
             db.run(
                 'UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0',
@@ -815,7 +638,7 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
                         console.error('Ошибка обновления статуса сообщений:', err);
                     }
                     
-                    res.json({ success: true, messages: messages });
+                    res.json({ success: true, messages: messagesWithFullUrls });
                 }
             );
         }
@@ -916,9 +739,6 @@ app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
 });
-
-app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads', 'avatars')));
-app.use('/uploads/files', express.static(path.join(__dirname, 'uploads', 'files')));
 
 // Запуск сервера
 server.listen(PORT, () => {
