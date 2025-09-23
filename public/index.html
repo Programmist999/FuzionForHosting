@@ -673,6 +673,9 @@
         .user-avatar-container {
             position: relative;
             margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         
         .call-avatar {
@@ -682,6 +685,8 @@
             object-fit: cover;
             border: 3px solid #7a64ff;
             box-shadow: 0 10px 30px rgba(122, 100, 255, 0.4);
+            position: relative; /* Добавьте это */
+            z-index: 1; /* Добавьте это */
         }
         
         .user-name {
@@ -707,6 +712,7 @@
             border-radius: 50%;
             opacity: 0;
             animation: pulse 2s infinite;
+            z-index: -1; /* Добавьте это */
         }
         
         .pulse-ring.delayed {
@@ -2263,6 +2269,12 @@
         const WS_URL = window.location.origin.replace('http', 'ws');
         
         // WebRTC конфигурация
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
         // Обновите конфигурацию WebRTC
         const configuration = {
             iceServers: [
@@ -2421,8 +2433,12 @@
                     playBtn.innerHTML = '<i class="fas fa-play"></i>';
                     playBtn.classList.remove('playing');
                 }
-                if (durationEl) durationEl.classList.remove('playing');
-                if (progressBar) progressBar.style.width = '0%';
+                if (durationEl) {
+                    durationEl.classList.remove('playing');
+                }
+                if (progressBar) {
+                    progressBar.style.width = '0%';
+                }
                 if (waveBars) {
                     waveBars.forEach(bar => {
                         bar.classList.remove('animated', 'active');
@@ -2494,6 +2510,16 @@
                 mediaRecorder.stop();
                 document.getElementById('voice-message-btn').classList.remove('recording');
                 document.getElementById('voice-recorder').classList.remove('active');
+                
+                // Останавливаем таймер и визуализатор
+                stopRecordingTimer();
+                stopAudioVisualizer();
+                
+                // Останавливаем поток микрофона
+                if (audioStream) {
+                    audioStream.getTracks().forEach(track => track.stop());
+                    audioStream = null;
+                }
             }
         }
         
@@ -2509,14 +2535,12 @@
                 return;
             }
             
-            if (isSending) {
-                console.log('Already sending voice, skipping...');
-                return;
-            }
-            
             isSending = true;
         
             try {
+                // Останавливаем запись перед отправкой
+                stopVoiceRecording();
+                
                 // Создаем Blob из записанных данных
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
                 
@@ -2533,17 +2557,8 @@
                     body: formData
                 });
                 
-                const data = await response.json();
+                const responseData = await response.json();
                 
-                if (data.success) {
-                    showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
-                    await loadMessages(); // Обновляем чат
-                } else {
-                    showNotification('Ошибка', data.error || 'Не удалось отправить голосовое сообщение', 'error');
-                }
-        
-                const responseData = await response.json(); // Переименовываем переменную
-
                 if (responseData.success) {
                     showNotification('Успех', 'Голосовое сообщение отправлено', 'success');
                     await loadMessages();
@@ -2555,6 +2570,10 @@
                 console.error('Ошибка отправки голосового сообщения:', error);
                 showNotification('Ошибка', 'Ошибка при отправке голосового сообщения', 'error');
             } finally {
+                // Закрываем окно записи в любом случае
+                document.getElementById('voice-recorder').classList.remove('active');
+                document.getElementById('voice-message-btn').classList.remove('recording');
+                
                 setTimeout(() => {
                     isSending = false;
                 }, 1000);
@@ -2986,6 +3005,19 @@
             }
             
             try {
+                // Находим пользователя по ID звонящего
+                const callerUser = allUsers.find(user => user.id == window.incomingCallerId);
+                if (callerUser) {
+                    currentContact = callerUser;
+                } else {
+                    // Если пользователь не найден в списке, создаем временный объект
+                    currentContact = {
+                        id: window.incomingCallerId,
+                        username: 'Собеседник',
+                        name: 'Собеседник'
+                    };
+                }
+                
                 // Получаем медиапоток
                 audioStream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
@@ -3053,6 +3085,12 @@
         
         function endCall() {
             console.log('Ending call');
+
+            const inputArea = document.getElementById('input-area');
+            // Показываем input-area после завершения звонка
+            if (inputArea) {
+                inputArea.style.display = 'flex';
+            }
             
             // Отправляем сообщение о завершении звонка
             if (websocket && currentCallId) {
@@ -3130,8 +3168,16 @@
         }
 
         function showCallInterface() {
-            const callContainer = document.getElementById('call-container');
+            // УБЕРИТЕ const - переменная уже объявлена
+            callContainer = document.getElementById('call-container');
+            const inputArea = document.getElementById('input-area');
+            
             callContainer.classList.add('active');
+            // Скрываем input-area во время звонка
+            if (inputArea) {
+                inputArea.style.display = 'none';
+            }
+            
             isCallActive = true;
             
             // Обновляем информацию
@@ -3583,7 +3629,29 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    renderMessages(data.messages);
+                    // Преобразуем относительные URL в абсолютные
+                    const messagesWithAbsoluteUrls = data.messages.map(message => {
+                        if (message.audio_url) {
+                            let audioUrl = message.audio_url;
+                            
+                            // Если URL относительный (начинается с /), добавляем базовый URL
+                            if (audioUrl.startsWith('/')) {
+                                audioUrl = `${window.location.origin}${audioUrl}`;
+                            }
+                            // Убедимся, что используется HTTPS
+                            else if (audioUrl.startsWith('http://')) {
+                                audioUrl = audioUrl.replace('http://', 'https://');
+                            }
+                            
+                            return {
+                                ...message,
+                                audio_url: audioUrl
+                            };
+                        }
+                        return message;
+                    });
+                    
+                    renderMessages(messagesWithAbsoluteUrls);
                 } else {
                     renderMessages([]);
                 }
@@ -3592,9 +3660,11 @@
                 renderMessages([]);
             }
         }
-
+        
         function renderMessages(messages) {
             const messagesContainer = document.getElementById('messages-container');
+
+            stopAllVoiceMessages();
             
             // Сохраняем только input-area
             const inputArea = messagesContainer.querySelector('.input-area');
@@ -3702,6 +3772,20 @@
                 }, delay);
             });
         }
+
+        function createTextMessageElement(message) {
+            const messageElement = document.createElement('div');
+            const isOutgoing = message.sender_id == currentUser.id;
+            
+            messageElement.className = `message ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+            
+            messageElement.innerHTML = `
+                <div class="message-text">${escapeHtml(message.message_text)}</div>
+                <div class="message-time">${new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+            `;
+            
+            return messageElement;
+        }
         
         async function playVoiceMessage(audioUrl) {
             try {
@@ -3738,15 +3822,17 @@
                 try {
                     stopAllVoiceMessages();
                     if (!audio) {
+                        console.log('Попытка воспроизведения:', message.audio_url);
+                        
                         audio = new Audio(message.audio_url);
                         currentPlayingAudio = audio;
                         currentPlayingElement = element;
                         
                         audio.addEventListener('timeupdate', function() {
+                            if (!audio || !progressBar) return;
                             const progress = (audio.currentTime / audio.duration) * 100;
                             progressBar.style.width = progress + '%';
                             
-                            // Анимируем волны в соответствии с воспроизведением
                             animateWaveform(audio.currentTime, audio.duration);
                         });
                         
@@ -3755,20 +3841,26 @@
                             resetPlayback();
                         });
                         
-                        audio.addEventListener('error', function() {
-                            showNotification('Ошибка', 'Не удалось воспроизвести голосовое сообщение', 'error');
+                        audio.addEventListener('error', function(e) {
+                            console.error('Ошибка аудио:', e);
+                            showNotification('Ошибка', 'Не удалось воспроизвести аудио', 'error');
                             stopPlayback();
                         });
                     }
                     
                     await audio.play();
                     isPlaying = true;
-                    playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-                    playBtn.classList.add('playing');
-                    durationEl.classList.add('playing');
+                    if (playBtn) {
+                        playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                        playBtn.classList.add('playing');
+                    }
+                    if (durationEl) {
+                        durationEl.classList.add('playing');
+                    }
                     
-                    // Запускаем анимацию волн
-                    waveBars.forEach(bar => bar.classList.add('animated'));
+                    if (waveBars) {
+                        waveBars.forEach(bar => bar.classList.add('animated'));
+                    }
                     
                 } catch (error) {
                     console.error('Ошибка воспроизведения:', error);
@@ -3781,42 +3873,56 @@
                     audio.pause();
                 }
                 isPlaying = false;
-                playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                playBtn.classList.remove('playing');
-                durationEl.classList.remove('playing');
+                if (playBtn) {
+                    playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    playBtn.classList.remove('playing');
+                }
+                if (durationEl) {
+                    durationEl.classList.remove('playing');
+                }
                 
-                // Останавливаем анимацию волн
-                waveBars.forEach(bar => bar.classList.remove('animated'));
+                if (waveBars) {
+                    waveBars.forEach(bar => bar.classList.remove('animated'));
+                }
             }
             
             function resetPlayback() {
-                progressBar.style.width = '0%';
-                waveBars.forEach(bar => {
-                    bar.style.transform = 'scaleY(1)';
-                    bar.style.opacity = '0.7';
-                });
+                if (progressBar) {
+                    progressBar.style.width = '0%';
+                }
             }
             
             function animateWaveform(currentTime, duration) {
                 const progress = currentTime / duration;
                 const activeBars = Math.floor(progress * waveBars.length);
                 
-                waveBars.forEach((bar, index) => {
-                    if (index <= activeBars) {
-                        bar.classList.add('active');
-                    } else {
-                        bar.classList.remove('active');
-                    }
-                });
+                if (waveBars) {
+                    waveBars.forEach((bar, index) => {
+                        if (index <= activeBars) {
+                            bar.classList.add('active');
+                        } else {
+                            bar.classList.remove('active');
+                        }
+                    });
+                }
             }
             
-            // Очистка при удалении элемента
-            element.addEventListener('DOMNodeRemoved', function() {
-                if (audio) {
-                    audio.pause();
-                    audio = null;
-                }
+            // ЗАМЕНА: Используем MutationObserver вместо DOMNodeRemoved
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.removedNodes && Array.from(mutation.removedNodes).includes(element)) {
+                        if (audio) {
+                            audio.pause();
+                            audio = null;
+                        }
+                        observer.disconnect();
+                    }
+                });
             });
+        
+            if (element.parentNode) {
+                observer.observe(element.parentNode, { childList: true });
+            }
         }
 
         async function sendMessage() {
@@ -3826,13 +3932,15 @@
                 return;
             }
             
-            if (isSending) {
-                console.log('Already sending, skipping...');
+            isSending = true;
+            const messageInput = document.getElementById('message-input');
+            const messageText = messageInput.value.trim();
+        
+            if (!messageText) {
+                isSending = false;
                 return;
             }
-            
-            isSending = true;
-
+        
             try {
                 const response = await fetch(`${API_BASE_URL}/api/send-message`, {
                     method: 'POST',
@@ -3858,15 +3966,12 @@
             } catch (error) {
                 console.error('Ошибка отправки сообщения:', error);
                 showNotification('Ошибка', 'Не удалось отправить сообщение', 'error');
-            }
-            
             } finally {
                 setTimeout(() => {
                     isSending = false;
                 }, 1000); // Задержка перед следующей отправкой
             }
         }
-
         
         
         // ===== ФУНКЦИИ ДЛЯ ПОИСКА ПОЛЬЗОВАТЕЛЕЙ =====
@@ -4213,17 +4318,66 @@
             }
         }
 
+        function openSearchModal() {
+            document.getElementById('search-modal').classList.add('active');
+            document.getElementById('user-search-input').value = '';
+            document.getElementById('user-search-input').focus();
+            clearSearchResults();
+        }
+
+        function closeSearchModal() {
+            document.getElementById('search-modal').classList.remove('active');
+        }
+        
         function setupEventListeners() {
             if (eventListenersInitialized) {
                 console.log('Event listeners already initialized');
                 return;
             }
-        
+            
             // Очищаем все предыдущие обработчики
             removeAllEventListeners();
-        
-            // Добавляем обработчики с использованием делегирования событий
-            setupEventDelegation();
+            
+            // Основные обработчики
+            document.getElementById('user-search-input').addEventListener('input', function(e) {
+                const query = e.target.value.trim();
+                clearTimeout(searchTimeout);
+                
+                if (query.length >= 2) {
+                    searchTimeout = setTimeout(() => {
+                        searchUsers(query);
+                    }, 300);
+                } else if (query.length === 0) {
+                    clearSearchResults();
+                }
+            });
+            document.getElementById('close-search-modal').addEventListener('click', closeSearchModal);
+            document.querySelector('.new-chat-btn').addEventListener('click', openSearchModal);
+            document.getElementById('login-btn').addEventListener('click', handleLogin);
+            document.getElementById('register-btn').addEventListener('click', handleRegister);
+            document.getElementById('show-register').addEventListener('click', showRegisterForm);
+            document.getElementById('show-login').addEventListener('click', showLoginForm);
+            document.getElementById('profile-btn').addEventListener('click', showProfileSettings);
+            document.getElementById('logout-btn').addEventListener('click', logoutUser);
+            document.getElementById('profile-cancel').addEventListener('click', hideProfileSettings);
+            document.getElementById('profile-save').addEventListener('click', saveProfileSettings);
+            document.getElementById('close-notification').addEventListener('click', hideNotification);
+            document.getElementById('avatar-file-input').addEventListener('change', handleAvatarUpload);
+            document.getElementById('remove-avatar-btn').addEventListener('click', removeAvatar);
+            
+            // Обработчики звонков
+            document.getElementById('call-btn').addEventListener('click', startCall);
+            document.getElementById('mute-btn').addEventListener('click', toggleMute);
+            document.getElementById('end-call-btn').addEventListener('click', endCall);
+            document.getElementById('accept-call').addEventListener('click', acceptCall);
+            document.getElementById('reject-call').addEventListener('click', rejectCall);
+            
+            // Обработчики сообщений
+            document.getElementById('send-btn').addEventListener('click', sendMessage);
+            document.getElementById('voice-message-btn').addEventListener('click', handleVoiceMessageClick);
+            document.getElementById('message-input').addEventListener('keypress', handleMessageInputKeypress);
+            document.getElementById('cancel-recording').addEventListener('click', cancelRecording);
+            document.getElementById('send-recording').addEventListener('click', sendVoiceMessage);
             
             eventListenersInitialized = true;
             console.log('Event listeners initialized');
@@ -4248,47 +4402,47 @@
         }
         
         // Настройка делегирования событий (самое надежное решение)
-        function setupEventDelegation() {
-            // Делегирование кликов
-            document.addEventListener('click', function(e) {
-                // Отправка сообщения
-                if (e.target.closest('#send-btn') || e.target.id === 'send-btn') {
-                    e.preventDefault();
-                    sendMessage();
-                    return;
-                }
+        // function setupEventDelegation() {
+        //     // Делегирование кликов
+        //     document.addEventListener('click', function(e) {
+        //         // Отправка сообщения
+        //         if (e.target.closest('#send-btn') || e.target.id === 'send-btn') {
+        //             e.preventDefault();
+        //             sendMessage();
+        //             return;
+        //         }
                 
-                // Голосовое сообщение
-                if (e.target.closest('#voice-message-btn') || e.target.id === 'voice-message-btn') {
-                    e.preventDefault();
-                    const btn = e.target.closest('#voice-message-btn') || e.target;
-                    handleVoiceMessage(btn);
-                    return;
-                }
+        //         // Голосовое сообщение
+        //         if (e.target.closest('#voice-message-btn') || e.target.id === 'voice-message-btn') {
+        //             e.preventDefault();
+        //             const btn = e.target.closest('#voice-message-btn') || e.target;
+        //             handleVoiceMessage(btn);
+        //             return;
+        //         }
                 
-                // Отмена записи
-                if (e.target.closest('#cancel-recording') || e.target.id === 'cancel-recording') {
-                    e.preventDefault();
-                    cancelRecording();
-                    return;
-                }
+        //         // Отмена записи
+        //         if (e.target.closest('#cancel-recording') || e.target.id === 'cancel-recording') {
+        //             e.preventDefault();
+        //             cancelRecording();
+        //             return;
+        //         }
                 
-                // Отправка записи
-                if (e.target.closest('#send-recording') || e.target.id === 'send-recording') {
-                    e.preventDefault();
-                    sendVoiceMessage();
-                    return;
-                }
-            }, true); // Используем capture phase
+        //         // Отправка записи
+        //         if (e.target.closest('#send-recording') || e.target.id === 'send-recording') {
+        //             e.preventDefault();
+        //             sendVoiceMessage();
+        //             return;
+        //         }
+        //     }, true); // Используем capture phase
         
-            // Обработка клавиатуры
-            document.addEventListener('keypress', function(e) {
-                if (e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            }, true);
-        }
+        //     // Обработка клавиатуры
+        //     document.addEventListener('keypress', function(e) {
+        //         if (e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey) {
+        //             e.preventDefault();
+        //             sendMessage();
+        //         }
+        //     }, true);
+        // }
         
         // Обработчик голосовых сообщений
         function handleVoiceMessage(button) {
@@ -4332,3 +4486,4 @@
     </script>
 </body>
 </html>
+
