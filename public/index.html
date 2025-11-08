@@ -349,17 +349,52 @@
         
         .chat-header {
             padding: 18px 30px;
-            background: rgba(18, 21, 56, 0.9);
-            border-bottom: 1px solid rgba(101, 78, 163, 0.3);
+            justify-content: center;
+            /* backdrop-filter: blur(10px);  */
+            padding: 10px 15px;
+            background: rgba(18, 21, 56, 0);
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position:absolute;
+            /* left: 0;
+            right: 0;
+            z-index: 1000; */
+            width: 100%; /* На всю ширину */
+            border-radius: 12px;
+            border: #7a64ff 5px;
         }
         
         .chat-contact-info {
-            display: flex;
+            width: 15%;
+            border-radius: 32px;
+            border: 1px solid rgba(101, 78, 163, 0.281);
+            font-size: 15px;
+            resize: none;
+            max-height: 120px;
+            transition: all 0.3s ease;
+            background: rgba(13, 15, 35, 0.089); /* Полупрозрачный фон */
+            color: #fff;
+            height: 60px;
+            min-height: 50px;
+            display:grid;
+            /* justify-content: center; */
             align-items: center;
+            backdrop-filter: blur(20px);
+        }
+
+        .chat-contact-info:focus {
+            outline: none;
+            border-color: #7a64ff;
+            box-shadow: 0 0 20px rgba(122, 100, 255, 0.3);
+            width: 75%;
+            background: rgba(13, 15, 35, 0.9); /* Чуть менее прозрачный при фокусе */
+        }
+
+        .chat-contact-info:hover {
+            border-color: #7b64ff;
+            background: rgba(13, 15, 35, 0.089); /* Полупрозрачный фон */
+            width: 75%;
         }
         
         .chat-avatar {
@@ -370,17 +405,28 @@
             margin-right: 15px;
             border: 2px solid #7a64ff;
             box-shadow: 0 5px 15px rgba(122, 100, 255, 0.3);
+            display: flex;
+            justify-content: end;
+            align-items: flex-start;
+            gap: 22px;
+            position: absolute;
+            left: 5px;
         }
         
         .chat-contact-name {
             font-weight: 600;
             color: #fff;
             font-size: 18px;
+            position: absolute;
+            top: 17px;
+            left: 60px;
         }
         
         .chat-controls {
-            display: flex;
+            display: grid;
             gap: 12px;
+            grid-template-columns: auto auto;
+            /* position: relative; */
         }
         
         .call-btn {
@@ -391,11 +437,15 @@
             width: 50px;
             height: 50px;
             cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            display: grid;
+            justify-content:center;
+            align-items:baseline;
             font-size: 18px;
             transition: all 0.3s ease;
+            grid-column: 2;
+            position: absolute;
+            right: 5px;
+            top: 5px;
         }
         
         .call-btn:hover {
@@ -1972,11 +2022,11 @@
                     <div class="chat-contact-info">
                         <img src="./free-icon-user-avatar-3607444.png" alt="Аватар" class="chat-avatar" id="current-chat-avatar">
                         <div class="chat-contact-name" id="current-chat-name">Выберите чат</div>
-                    </div>
-                    <div class="chat-controls">
-                        <button class="call-btn" id="call-btn">
-                            <i class="fas fa-phone"></i>
-                        </button>
+                        <div class="chat-controls">
+                            <button class="call-btn" id="call-btn">
+                                <i class="fas fa-phone"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -4486,4 +4536,5 @@
     </script>
 </body>
 </html>
+
 
