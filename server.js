@@ -345,6 +345,39 @@ setInterval(() => {
     }
 }, 60000);
 
+function addMissingColumns() {
+    const columnsToAdd = [
+        { name: 'file_url', type: 'TEXT' },
+        { name: 'file_name', type: 'TEXT' },
+        { name: 'file_size', type: 'INTEGER' },
+        { name: 'file_type', type: 'TEXT' }
+    ];
+    
+    // Сначала получаем все существующие колонки
+    db.all(`PRAGMA table_info(messages)`, (err, rows) => {
+        if (err) {
+            console.error('Ошибка получения информации о таблице:', err);
+            return;
+        }
+        
+        const existingColumns = rows.map(row => row.name);
+        
+        columnsToAdd.forEach(column => {
+            if (!existingColumns.includes(column.name)) {
+                // Колонка не существует, добавляем её
+                db.run(`ALTER TABLE messages ADD COLUMN ${column.name} ${column.type}`, (err) => {
+                    if (err) {
+                        console.error(`Ошибка добавления колонки ${column.name}:`, err);
+                    } else {
+                        console.log(`Колонка ${column.name} успешно добавлена`);
+                    }
+                });
+            } else {
+                console.log(`Колонка ${column.name} уже существует`);
+            }
+        });
+    });
+}
 // Инициализация базы данных
 const db = new sqlite3.Database('./messenger.db', (err) => {
     if (err) {
@@ -449,34 +482,6 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
     }
 });
 
-function addMissingColumns() {
-    const columnsToAdd = [
-        { name: 'file_url', type: 'TEXT' },
-        { name: 'file_name', type: 'TEXT' },
-        { name: 'file_size', type: 'INTEGER' },
-        { name: 'file_type', type: 'TEXT' }
-    ];
-    
-    columnsToAdd.forEach(column => {
-        db.get(`PRAGMA table_info(messages) WHERE name = ?`, [column.name], (err, row) => {
-            if (err) {
-                console.error(`Ошибка проверки колонки ${column.name}:`, err);
-                return;
-            }
-            
-            if (!row) {
-                // Колонка не существует, добавляем её
-                db.run(`ALTER TABLE messages ADD COLUMN ${column.name} ${column.type}`, (err) => {
-                    if (err) {
-                        console.error(`Ошибка добавления колонки ${column.name}:`, err);
-                    } else {
-                        console.log(`Колонка ${column.name} успешно добавлена`);
-                    }
-                });
-            }
-        });
-    });
-}
 
 app.post('/api/send-voice-message', upload.single('audio'), async (req, res) => {
     try {
@@ -884,5 +889,6 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
 
