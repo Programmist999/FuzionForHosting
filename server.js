@@ -65,6 +65,85 @@ wss.on('connection', (ws, request) => {
     });
 });
 
+const fileDir = path.join(__dirname, 'uploads', 'files');
+if (!fs.existsSync(fileDir)) {
+    fs.mkdirSync(fileDir, { recursive: true });
+}
+
+// Настройка multer для файлов
+const fileStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, fileDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'file-' + uniqueSuffix + '-' + file.originalname);
+    }
+});
+
+const fileUpload = multer({ 
+    storage: fileStorage,
+    limits: {
+        fileSize: 50 * 1024 * 1024 // 50MB limit
+    }
+});
+
+// API для отправки файлов
+app.post('/api/send-file', fileUpload.single('file'), async (req, res) => {
+    try {
+        const { senderId, receiverId, fileName, fileSize, fileType } = req.body;
+        const file = req.file;
+
+        if (!senderId || !receiverId || !fileName || !file) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Отсутствуют обязательные поля' 
+            });
+        }
+
+        const fileUrl = `/uploads/files/${file.filename}`;
+        
+        // Сохраняем в базу данных
+        db.run(
+            `INSERT INTO messages (sender_id, receiver_id, file_url, file_name, file_size, file_type, message_type) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [senderId, receiverId, fileUrl, fileName, fileSize, fileType, 'file'],
+            function(err) {
+                if (err) {
+                    console.error('Ошибка сохранения файла:', err);
+                    fs.unlinkSync(file.path);
+                    return res.status(500).json({ 
+                        success: false, 
+                        error: 'Ошибка при сохранении файла' 
+                    });
+                }
+
+                res.json({ 
+                    success: true,
+                    message: 'Файл отправлен',
+                    messageData: {
+                        id: this.lastID,
+                        file_url: fileUrl,
+                        file_name: fileName,
+                        file_size: fileSize,
+                        file_type: fileType
+                    }
+                });
+            }
+        );
+
+    } catch (error) {
+        console.error('Ошибка отправки файла:', error);
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({ 
+            success: false, 
+            error: 'Ошибка при обработке файла' 
+        });
+    }
+});
+
 // Создаем папку для аудиофайлов если её нет
 const audioDir = path.join(__dirname, 'uploads', 'audio');
 if (!fs.existsSync(audioDir)) {
@@ -119,26 +198,27 @@ function handleWebSocketMessage(userId, data) {
 }
 
 function handleCallOffer(callerId, data) {
-    const { targetUserId, offer, callerName, callerAvatar, callId } = data;
-    console.log('Call offer from', callerId, 'to', targetUserId, 'callId:', callId);
+    const { targetUserId, offer, callerName, callerAvatar, callId, isVideoCall } = data;
+    console.log((isVideoCall ? 'Video' : 'Audio') + ' call offer from', callerId, 'to', targetUserId);
     
-    // Сохраняем информацию о звонке
     activeCalls.set(callId, {
         callerId: callerId.toString(),
         targetUserId: targetUserId.toString(),
         offer: offer,
+        isVideoCall: isVideoCall || false,
         timestamp: Date.now()
     });
     
-    const targetWs = userConnections.get(targetUserId.toString());
+     const targetWs = userConnections.get(targetUserId.toString());
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
-            type: 'incoming-call',
+            type: isVideoCall ? 'incoming-video-call' : 'incoming-call',
             callerId: callerId,
             offer: offer,
             callerName: callerName,
             callerAvatar: callerAvatar,
-            callId: callId
+            callId: callId,
+            isVideoCall: isVideoCall
         }));
         console.log('Call offer sent to', targetUserId);
     } else {
@@ -315,13 +395,17 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                 console.log('Старая таблица messages удалена');
                 
                 // Создаем новую таблицу с полем audio_url
-                db.run(`CREATE TABLE messages (
+                db.run(`CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sender_id INTEGER NOT NULL,
                     receiver_id INTEGER NOT NULL,
                     message_text TEXT,
                     audio_url TEXT,
                     duration INTEGER,
+                    file_url TEXT,
+                    file_name TEXT,
+                    file_size INTEGER,
+                    file_type TEXT,
                     message_type TEXT DEFAULT 'text',
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     is_read INTEGER DEFAULT 0,
@@ -329,12 +413,12 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
                     FOREIGN KEY (receiver_id) REFERENCES users (id)
                 )`, (err) => {
                     if (err) {
-                        console.error('Ошибка создания новой таблицы messages:', err);
+                        console.error('Ошибка создания таблицы messages:', err);
                     } else {
-                        console.log('Новая таблица messages создана с полем audio_url');
-
-                        cleanupOldAudioFiles();
-                        setInterval(cleanupOldAudioFiles, 24 * 60 * 60 * 1000);
+                        console.log('Таблица messages готова с поддержкой файлов.');
+                        
+                        // Проверяем и добавляем отсутствующие колонки если нужно
+                        addMissingColumns();
                     }
                 });
             }
@@ -364,6 +448,35 @@ const db = new sqlite3.Database('./messenger.db', (err) => {
         });
     }
 });
+
+function addMissingColumns() {
+    const columnsToAdd = [
+        { name: 'file_url', type: 'TEXT' },
+        { name: 'file_name', type: 'TEXT' },
+        { name: 'file_size', type: 'INTEGER' },
+        { name: 'file_type', type: 'TEXT' }
+    ];
+    
+    columnsToAdd.forEach(column => {
+        db.get(`PRAGMA table_info(messages) WHERE name = ?`, [column.name], (err, row) => {
+            if (err) {
+                console.error(`Ошибка проверки колонки ${column.name}:`, err);
+                return;
+            }
+            
+            if (!row) {
+                // Колонка не существует, добавляем её
+                db.run(`ALTER TABLE messages ADD COLUMN ${column.name} ${column.type}`, (err) => {
+                    if (err) {
+                        console.error(`Ошибка добавления колонки ${column.name}:`, err);
+                    } else {
+                        console.log(`Колонка ${column.name} успешно добавлена`);
+                    }
+                });
+            }
+        });
+    });
+}
 
 app.post('/api/send-voice-message', upload.single('audio'), async (req, res) => {
     try {
@@ -771,4 +884,5 @@ process.on('SIGINT', () => {
         });
     });
 });
+
 
