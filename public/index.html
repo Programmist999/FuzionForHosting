@@ -2100,6 +2100,100 @@
                 gap: 10px;
             }
         }
+
+        .video-container {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 800px;
+            background: #2c3e50;
+            border-radius: 10px;
+            padding: 20px;
+            z-index: 1000;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        
+        .video-wrapper {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .local-video, .remote-video {
+            flex: 1;
+            background: #000;
+            border-radius: 5px;
+            min-height: 200px;
+        }
+        
+        .local-video video, .remote-video video {
+            width: 100%;
+            height: auto;
+            border-radius: 5px;
+        }
+        
+        .call-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .call-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .accept-call { background: #27ae60; color: white; }
+        .reject-call { background: #e74c3c; color: white; }
+        .end-call { background: #e74c3c; color: white; }
+        
+        /* Стили для отправки файлов */
+        .file-input {
+            display: none;
+        }
+        
+        .file-preview {
+            max-width: 200px;
+            max-height: 200px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        
+        .file-message {
+            background: #34495e;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+            word-break: break-all;
+        }
+        
+        .file-link {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        .file-link:hover {
+            text-decoration: underline;
+        }
+        
+        .attachment-btn {
+            background: none;
+            border: none;
+            color: #bdc3c7;
+            cursor: pointer;
+            padding: 10px;
+            font-size: 16px;
+        }
+        
+        .attachment-btn:hover {
+            color: #ecf0f1;
+        }
     </style>
 </head>
 <body>
@@ -2402,6 +2496,20 @@
             </div>
         </div>
     </div>
+
+    <div id="videoContainer" class="video-container">
+        <div class="video-wrapper">
+            <div class="local-video">
+                <video id="localVideo" autoplay muted></video>
+            </div>
+            <div class="remote-video">
+                <video id="remoteVideo" autoplay></video>
+            </div>
+        </div>
+        <div class="call-controls">
+            <button id="endCallBtn" class="call-btn end-call">Завершить звонок</button>
+        </div>
+    </div>
     
     <!-- Модальное окно входящего звонка -->
     <div class="modal-overlay" id="incoming-call-modal">
@@ -2425,7 +2533,9 @@
         </div>
     </div>
 
+    <input type="file" id="fileInput" class="file-input" multiple>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script>
         // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
         let currentUser = null;
@@ -2469,6 +2579,15 @@
         let currentCallId = null;
         let isCaller = false;
         let pendingIceCandidates = [];
+        let localStream = null;
+        let remoteStream = null;
+        let peerConnection = null;
+        let isInitiator = false;
+        const servers = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]
+        };
         
         // Базовый URL API
         const API_BASE_URL = window.location.origin;
@@ -2771,17 +2890,63 @@
             fileInput.addEventListener('change', handleFileSelect);
         }
 
-        async function handleFileSelect(event) {
+        function handleFileSelect(event) {
             const files = event.target.files;
-            if (!files.length || !currentUser || !currentContact) return;
-            
             for (let file of files) {
-                await uploadFile(file);
+                sendFile(file);
             }
-            
-            // Сбрасываем input
-            event.target.value = '';
+            fileInput.value = '';
         }
+
+        function sendFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const fileData = {
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    data: e.target.result,
+                    timestamp: new Date().toISOString()
+                };
+                
+                socket.emit('chat-message', {
+                    type: 'file',
+                    file: fileData,
+                    sender: username,
+                    room: currentRoom
+                }, currentRoom);
+                
+                displayFileMessage(fileData, username, true);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function displayFileMessage(fileData, sender, isOwn = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isOwn ? 'own-message' : 'other-message'}`;
+            
+            const fileMessage = document.createElement('div');
+            fileMessage.className = 'file-message';
+            
+            const fileLink = document.createElement('a');
+            fileLink.href = fileData.data;
+            fileLink.download = fileData.name;
+            fileLink.className = 'file-link';
+            fileLink.textContent = `📎 ${fileData.name} (${formatFileSize(fileData.size)})`;
+            fileLink.target = '_blank';
+            
+            fileMessage.appendChild(fileLink);
+            messageDiv.appendChild(fileMessage);
+            
+            const meta = document.createElement('div');
+            meta.className = 'message-meta';
+            meta.textContent = `${sender} • ${new Date().toLocaleTimeString()}`;
+            messageDiv.appendChild(meta);
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
         
         async function uploadFile(file) {
             if (file.size > 50 * 1024 * 1024) { // 50MB limit
@@ -2869,6 +3034,15 @@
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
+
+        socket.on('chat-message', (message) => {
+            if (message.type === 'file') {
+                displayFileMessage(message.file, message.sender, message.sender === username);
+            } else {
+                // Обычные текстовые сообщения
+                displayMessage(message.text, message.sender, message.sender === username);
+            }
+        });
 
         async function downloadFile(fileUrl, fileName) {
             try {
@@ -3018,66 +3192,23 @@
         }
 
         // ===== ФУНКЦИИ ДЛЯ ВИДЕОЗВОНКОВ =====
-        async function startVideoCall() {
-            if (!currentContact) {
-                showNotification('Ошибка', 'Выберите собеседника для видеозвонка', 'error');
-                return;
-            }
-            
+       async function startVideoCall() {
             try {
-                // Получаем видеопоток
-                localVideoStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: {
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 30 }
-                    },
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        sampleRate: 44100
-                    }
-                });
+                isInitiator = true;
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
                 
-                // Отображаем локальное видео
-                const localVideo = document.getElementById('local-video');
-                localVideo.srcObject = localVideoStream;
+                videoContainer.style.display = 'block';
+                createPeerConnection();
                 
-                // Инициализируем WebRTC с видео
-                await initializeWebRTC(true);
-                
-                isCaller = true;
-                currentCallId = Date.now().toString();
-                isVideoEnabled = true;
-                
-                // Создаем offer
-                const offer = await peerConnection.createOffer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: true
-                });
-                
-                await peerConnection.setLocalDescription(offer);
-                
-                // Отправляем видеозвонок
-                websocket.send(JSON.stringify({
-                    type: 'video-call-offer',
-                    targetUserId: currentContact.id,
-                    offer: offer,
-                    callerName: currentUser.name || currentUser.username,
-                    callerAvatar: currentUser.avatar || './free-icon-user-avatar-3607444.png',
-                    callId: currentCallId,
-                    isVideoCall: true
-                }));
-                
-                showVideoCallInterface();
-                showNotification('Видеозвонок', 'Вызываем собеседника...', 'info');
+                // Уведомляем собеседника о звонке
+                socket.emit('call-user', currentRoom, username);
                 
             } catch (error) {
-                console.error('Ошибка начала видеозвонка:', error);
-                showNotification('Ошибка', 'Не удалось начать видеозвонок: ' + error.message, 'error');
+                console.error('Ошибка доступа к камере:', error);
+                alert('Не удалось получить доступ к камере и микрофону');
             }
         }
-
         async function toggleVideo() {
             if (!localVideoStream) return;
             
@@ -3108,53 +3239,141 @@
         
         async function startScreenShare() {
             try {
-                // Проверяем поддержку демонстрации экрана
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                    showNotification('Ошибка', 'Демонстрация экрана не поддерживается в вашем браузере', 'error');
-                    return;
-                }
+                isInitiator = true;
+                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
                 
-                screenStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: {
-                        cursor: 'always',
-                        displaySurface: 'browser'
-                    },
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        sampleRate: 44100
-                    }
-                });
+                videoContainer.style.display = 'block';
+                createPeerConnection();
                 
-                // Заменяем видеотрек в peerConnection
-                const videoTrack = screenStream.getVideoTracks()[0];
-                const sender = peerConnection.getSenders().find(s => 
-                    s.track && s.track.kind === 'video'
-                );
+                // Уведомляем собеседника о демонстрации экрана
+                socket.emit('call-user', currentRoom, username);
                 
-                if (sender) {
-                    await sender.replaceTrack(videoTrack);
-                }
-                
-                // Отображаем экран вместо камеры
-                const localVideo = document.getElementById('local-video');
-                localVideo.srcObject = screenStream;
-                
-                isScreenSharing = true;
-                document.getElementById('screen-share-btn').classList.add('active');
-                
-                // Обработчик завершения демонстрации экрана
-                videoTrack.onended = async () => {
-                    await stopScreenShare();
+                // Обработка завершения демонстрации экрана
+                localStream.getVideoTracks()[0].onended = () => {
+                    endCall();
                 };
                 
             } catch (error) {
                 console.error('Ошибка демонстрации экрана:', error);
-                if (error.name !== 'NotAllowedError') {
-                    showNotification('Ошибка', 'Не удалось начать демонстрацию экрана', 'error');
-                }
             }
         }
+
+        function createPeerConnection() {
+            peerConnection = new RTCPeerConnection(servers);
+            
+            // Добавляем локальный поток
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            // Обрабатываем входящий поток
+            peerConnection.ontrack = (event) => {
+                remoteStream = event.streams[0];
+                remoteVideo.srcObject = remoteStream;
+            };
+            
+            // Обрабатываем ICE кандидаты
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice-candidate', event.candidate, currentRoom, username);
+                }
+            };
+            
+            // Создаем оффер если мы инициатор
+            if (isInitiator) {
+                createOffer();
+            }
+        }
+
+        async function createOffer() {
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit('offer', offer, currentRoom, username);
+            } catch (error) {
+                console.error('Ошибка создания оффера:', error);
+            }
+        }
+
+        async function createAnswer() {
+            try {
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                socket.emit('answer', answer, currentRoom, username);
+            } catch (error) {
+                console.error('Ошибка создания ответа:', error);
+            }
+        }
+
+        // Обработчики сокетов для WebRTC
+        socket.on('call-made', (userId) => {
+            incomingCallAlert.style.display = 'block';
+            
+            acceptCallBtn.onclick = () => {
+                incomingCallAlert.style.display = 'none';
+                acceptCall(userId);
+            };
+            
+            rejectCallBtn.onclick = () => {
+                incomingCallAlert.style.display = 'none';
+                socket.emit('reject-call', currentRoom, userId);
+            };
+        });
+        
+        socket.on('call-rejected', (userId) => {
+            alert(`${userId} отклонил ваш звонок`);
+            endCall();
+        });
+        
+        socket.on('call-ended', (userId) => {
+            alert(`${userId} завершил звонок`);
+            endCall();
+        });
+
+        async function acceptCall(userId) {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+                
+                videoContainer.style.display = 'block';
+                createPeerConnection();
+            } catch (error) {
+                console.error('Ошибка при принятии звонка:', error);
+            }
+        }
+        
+        socket.on('offer', async (offer, userId) => {
+            if (!peerConnection) {
+                await createPeerConnection();
+            }
+            
+            try {
+                await peerConnection.setRemoteDescription(offer);
+                await createAnswer();
+            } catch (error) {
+                console.error('Ошибка обработки оффера:', error);
+            }
+        });
+        
+        socket.on('answer', async (answer, userId) => {
+            try {
+                await peerConnection.setRemoteDescription(answer);
+            } catch (error) {
+                console.error('Ошибка обработки ответа:', error);
+            }
+        });
+        
+        socket.on('ice-candidate', async (candidate, userId) => {
+            try {
+                await peerConnection.addIceCandidate(candidate);
+            } catch (error) {
+                console.error('Ошибка добавления ICE кандидата:', error);
+            }
+        });
+        
+        // Завершение звонка
+        endCallBtn.addEventListener('click', endCall);
         
         async function stopScreenShare() {
             if (!screenStream) return;
@@ -3716,9 +3935,29 @@
             // Восстанавливаем нормальный интерфейс
             document.getElementById('message-input').disabled = !currentContact;
             document.getElementById('send-btn').disabled = !currentContact;
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            localVideo.srcObject = null;
+            remoteVideo.srcObject = null;
+            videoContainer.style.display = 'none';
+            isInitiator = false;
+            
+            socket.emit('end-call', currentRoom, username);
             
             showNotification('Звонок', 'Звонок завершен', 'info');
         }
+
+        document.querySelector('.fa-video').parentElement.onclick = startVideoCall;
+        document.querySelector('.fa-desktop').parentElement.onclick = startScreenShare;
         
         function checkConnectionStatus() {
             if (!isCallActive) return;
@@ -5066,18 +5305,25 @@
                     showNotification('Ошибка', 'Разрешите доступ к микрофону для звонков', 'error');
                 });
         }
+
+        // Элементы интерфейса
+        const videoContainer = document.getElementById('videoContainer');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const endCallBtn = document.getElementById('endCallBtn');
+        const incomingCallAlert = document.getElementById('incomingCallAlert');
+        const acceptCallBtn = document.getElementById('acceptCallBtn');
+        const rejectCallBtn = document.getElementById('rejectCallBtn');
+        const fileInput = document.getElementById('fileInput');
+        const attachmentBtn = document.querySelector('.attachment-btn');
+        
+        // Функционал отправки файлов
+        attachmentBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
         
         // Проверяем разрешения при загрузке
         setTimeout(checkAudioPermissions, 1000);
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
