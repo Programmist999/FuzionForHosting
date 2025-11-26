@@ -8,11 +8,9 @@ const http = require('http');
 const WebSocket = require('ws');
 const multer = require('multer');
 const fs = require('fs');
-const socketIo = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
 const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3000;
 
@@ -892,66 +890,4 @@ process.on('SIGINT', () => {
     });
 });
 
-app.use(express.static(path.join(__dirname)));
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-io.on('connection', (socket) => {
-    console.log('Пользователь подключился:', socket.id);
-
-    socket.on('join-room', (roomId, userId) => {
-        socket.join(roomId);
-        socket.to(roomId).emit('user-connected', userId);
-        
-        socket.on('disconnect', () => {
-            socket.to(roomId).emit('user-disconnected', userId);
-        });
-    });
-
-    // Сигналы WebRTC
-    socket.on('offer', (offer, roomId, userId) => {
-        socket.to(roomId).emit('offer', offer, userId);
-    });
-
-    socket.on('answer', (answer, roomId, userId) => {
-        socket.to(roomId).emit('answer', answer, userId);
-    });
-
-    socket.on('ice-candidate', (candidate, roomId, userId) => {
-        socket.to(roomId).emit('ice-candidate', candidate, userId);
-    });
-
-    // Сообщения чата
-    socket.on('chat-message', (message, roomId) => {
-        io.to(roomId).emit('chat-message', message);
-    });
-
-    // Сигналы для видео-звонков
-    socket.on('call-user', (roomId, userId) => {
-        socket.to(roomId).emit('call-made', userId);
-    });
-
-    socket.on('make-answer', (answer, roomId, userId) => {
-        socket.to(roomId).emit('answer-made', answer, userId);
-    });
-
-    socket.on('reject-call', (roomId, userId) => {
-        socket.to(roomId).emit('call-rejected', userId);
-    });
-
-    socket.on('end-call', (roomId, userId) => {
-        socket.to(roomId).emit('call-ended', userId);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Пользователь отключился:', socket.id);
-    });
-});
-
-// const PORT = process.env.PORT || 3000;
-// server.listen(PORT, () => {
-//     console.log(`Сервер запущен на порту ${PORT}`);
-// });
 
