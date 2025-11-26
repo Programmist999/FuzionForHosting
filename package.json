@@ -15,7 +15,10 @@
     "cors": "^2.8.5",
     "ws": "^8.14.2",
     "multer": "^1.4.5-lts.1",
-    "socket.io": "^4.7.5"
+    "socket.io": "4.7.5"
+  },
+  "engines": {
+    "node": "18.x"
   },
   "keywords": [
     "messenger",
@@ -29,5 +32,6 @@
   "author": "Your Name",
   "license": "MIT"
 }
+
 
 
